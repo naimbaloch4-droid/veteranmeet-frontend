@@ -56,8 +56,24 @@ export default function MessagesPage() {
     const checkMobile = () => setIsMobileView(window.innerWidth < 1024);
     checkMobile();
     window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, [fetchRooms, fetchFollowing]);
+
+    // SMART POLLING: Check for new messages/rooms every 4 seconds
+    // This provides a "real-time" feel without using WebSockets
+    const pollInterval = setInterval(() => {
+      // Quietly refresh rooms list to check for new chats or unread counts
+      fetchRooms();
+
+      // If we are in a chat, check for new messages
+      if (currentRoom) {
+        fetchMessages(currentRoom.id);
+      }
+    }, 4000);
+
+    return () => {
+      window.removeEventListener('resize', checkMobile);
+      clearInterval(pollInterval);
+    };
+  }, [fetchRooms, fetchFollowing, currentRoom?.id, fetchMessages]); // Re-run when currentRoom changes
 
   useEffect(() => {
     if (messagesEndRef.current) {

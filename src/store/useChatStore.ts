@@ -93,26 +93,57 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   },
 
   sendMessage: async (roomId: number, content: string) => {
+    // Optimistic Update: Create a temporary message
+    const tempId = Date.now();
+    const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+    const optimisticMessage: Message = {
+      id: tempId,
+      room: roomId,
+      sender: currentUser,
+      content: content,
+      created_at: new Date().toISOString(),
+      is_read: false
+    };
+
+    // Add to UI immediately
+    set((state) => ({
+      messages: [...state.messages, optimisticMessage],
+      rooms: state.rooms.map(room =>
+        room.id === roomId
+          ? { ...room, last_message: optimisticMessage, updated_at: optimisticMessage.created_at }
+          : room
+      )
+    }));
+
     try {
       const response = await api.post('/api/chat/messages/', {
         room: roomId,
         content
       });
 
-      const newMessage = response.data;
+      const actualMessage = response.data;
 
+      // Replace optimistic message with actual data from server
       set((state) => ({
-        messages: [...state.messages, newMessage],
+        messages: state.messages.map(msg => msg.id === tempId ? actualMessage : msg),
         rooms: state.rooms.map(room =>
           room.id === roomId
-            ? { ...room, last_message: newMessage, updated_at: newMessage.created_at }
+            ? { ...room, last_message: actualMessage, updated_at: actualMessage.created_at }
             : room
         )
       }));
 
-      return newMessage;
+      return actualMessage;
     } catch (error: any) {
-      console.error('Failed to send message:', error);
+      console.error('[Chat] Failed to save message to server:', error.response?.data || error.message);
+
+      // Update the optimistic message to reflect failure
+      set((state) => ({
+        messages: state.messages.map(msg =>
+          msg.id === tempId ? { ...msg, content: msg.content + ' ⚠️ (Failed to send)' } : msg
+        )
+      }));
+
       throw error;
     }
   },
