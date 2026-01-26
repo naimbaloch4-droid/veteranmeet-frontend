@@ -26,10 +26,11 @@ import {
 } from 'lucide-react';
 import api from '@/lib/api';
 import StatCard from '@/components/StatCard';
-import { 
-  formatDateTime, 
-  formatTimeAgo, 
-  getVeteranCategoryFromStars, 
+import { useConnectionStore } from '@/store/useConnectionStore';
+import {
+  formatDateTime,
+  formatTimeAgo,
+  getVeteranCategoryFromStars,
   getVeteranCategoryColor,
   getInitials,
   getAnnouncementPriorityColor
@@ -88,13 +89,14 @@ interface DashboardData {
   announcements: Announcement[];
 }
 
-export default function Dashboard() {
+export default function VeteranDashboard() {
+  const { following, fetchFollowing } = useConnectionStore();
   const [user, setUser] = useState<User | null>(null);
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
   const [userStats, setUserStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  
+
   // Modal states
   const [showCreatePost, setShowCreatePost] = useState(false);
   const [showCreateEvent, setShowCreateEvent] = useState(false);
@@ -115,7 +117,18 @@ export default function Dashboard() {
 
   useEffect(() => {
     fetchDashboardData();
-  }, []);
+    fetchFollowing();
+  }, [fetchFollowing]);
+
+  // Polling for real-time data updates
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetchDashboardData();
+      fetchFollowing();
+    }, 30000); // Update every 30 seconds
+
+    return () => clearInterval(interval);
+  }, [fetchFollowing]);
 
   const fetchDashboardData = async () => {
     try {
@@ -123,7 +136,7 @@ export default function Dashboard() {
       
       // Check if user is logged in
       if (!userData || !userData.id) {
-        setError('Please log in to access the dashboard');
+        setError('Please log in to access the veteran dashboard');
         setLoading(false);
         return;
       }
@@ -144,7 +157,7 @@ export default function Dashboard() {
       
       // Check if it's an authentication error
       if (err.response?.status === 401) {
-        setError('Authentication required. Please log in to access the dashboard.');
+        setError('Authentication required. Please log in to access the veteran dashboard.');
         // Redirect to login after a short delay
         setTimeout(() => {
           window.location.href = '/login';
@@ -394,11 +407,11 @@ export default function Dashboard() {
         <StatCard
           icon={Users}
           label="Connections"
-          value={0}
+          value={following.length}
           iconBgColor="bg-green-50"
           iconColor="text-green-600"
           borderColor="border-green-100"
-          subtitle="Followers"
+          subtitle="Following"
           delay={0.15}
         />
       </div>
@@ -568,6 +581,60 @@ export default function Dashboard() {
             </div>
           </div>
 
+          {/* Recent Posts */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Recent Posts</h2>
+            <div className="space-y-3">
+              {dashboardData?.recent_posts && dashboardData.recent_posts.length > 0 ? (
+                dashboardData.recent_posts.slice(0, 3).map((post) => (
+                  <motion.div
+                    key={post.id}
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    className="border border-gray-100 rounded-xl p-4 hover:bg-gray-50 transition-colors"
+                  >
+                    <div className="flex items-start space-x-3">
+                      <div className="w-8 h-8 bg-gray-800 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <span className="text-xs font-medium text-gray-100">
+                          {getInitials(post.author.first_name, post.author.last_name, post.author.username)}
+                        </span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between mb-1">
+                          <p className="text-xs font-semibold text-gray-900 truncate">
+                            {post.author.first_name} {post.author.last_name}
+                          </p>
+                          <span className="text-xs text-gray-500">
+                            {formatTimeAgo(post.created_at)}
+                          </span>
+                        </div>
+                        {post.title && (
+                          <h4 className="text-sm font-medium text-gray-900 mb-1 line-clamp-1">{post.title}</h4>
+                        )}
+                        <p className="text-xs text-gray-600 line-clamp-2 leading-relaxed">{post.content}</p>
+                        <div className="flex items-center space-x-3 mt-2 text-xs text-gray-500">
+                          <div className="flex items-center">
+                            <Heart className="w-3 h-3 mr-1" />
+                            <span>{post.likes_count || 0}</span>
+                          </div>
+                          <div className="flex items-center">
+                            <MessageSquare className="w-3 h-3 mr-1" />
+                            <span>{post.comments_count || 0}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </motion.div>
+                ))
+              ) : (
+                <div className="text-center py-6">
+                  <MessageSquare className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+                  <p className="text-xs text-gray-500">No recent posts</p>
+                </div>
+              )}
+            </div>
+          </div>
+
           {/* Veteran Benefits */}
           {user?.is_veteran && (
             <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl shadow-sm border border-blue-100 p-6">
@@ -713,7 +780,7 @@ export default function Dashboard() {
         )}
       </AnimatePresence>
 
-      {/* Create Event Modal */}
+      {/* Create Event Modal - Veterans Only */}
       <AnimatePresence>
         {showCreateEvent && user?.is_veteran && (
           <div className="fixed inset-0 modal-backdrop flex items-center justify-center z-50 p-4">
