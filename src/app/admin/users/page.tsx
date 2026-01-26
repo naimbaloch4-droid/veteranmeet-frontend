@@ -21,7 +21,11 @@ import {
   Trophy,
   Award,
   Gem,
-  Crown
+  Crown,
+  ChevronRight,
+  Info,
+  Clock as ClockIcon,
+  Award as AwardIcon
 } from 'lucide-react';
 import StatCard from '@/components/StatCard';
 
@@ -56,18 +60,7 @@ interface UserStar {
   event_title?: string;
 }
 
-// Veteran Category Thresholds
-const getVeteranCategory = (stars: number): string => {
-  if (stars >= 100000) return 'Eternal Sage';
-  if (stars >= 70000) return 'Platinum Veteran';
-  if (stars >= 65000) return 'Sapphire Veteran';
-  if (stars >= 60000) return 'Diamond Veteran';
-  if (stars >= 50000) return 'Golden Veteran';
-  if (stars >= 40000) return 'Ruby Veteran';
-  if (stars >= 25000) return 'Silver Veteran';
-  return 'Bronze Veteran';
-};
-
+// Veteran Category Helper (Uses central formatter now)
 const getCategoryColor = (category: string): string => {
   const colors: { [key: string]: string } = {
     'Eternal Sage': 'bg-purple-50 text-purple-700 border-purple-200',
@@ -149,8 +142,7 @@ export default function AdminUsers() {
         is_superuser: Boolean(user.is_superuser),
         is_staff: Boolean(user.is_staff),
         star_rating: user.star_rating || 0,
-        // Only calculate veteran category for veterans who are NOT admins
-        veteran_category: (user.is_veteran && !user.is_superuser) ? getVeteranCategory(user.star_rating || 0) : undefined,
+        veteran_category: (user.is_veteran && !user.is_superuser) ? getVeteranCategoryFromStars(user.star_rating || 0) : undefined,
         // Ensure date_joined is properly passed through
         date_joined: user.date_joined || user.created_at || null
       }));
@@ -165,16 +157,16 @@ export default function AdminUsers() {
 
   const filteredUsers = users.filter(user => {
     const matchesSearch = user.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         `${user.first_name} ${user.last_name}`.toLowerCase().includes(searchTerm.toLowerCase());
+      user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      `${user.first_name} ${user.last_name}`.toLowerCase().includes(searchTerm.toLowerCase());
 
     const matchesStatus = filterStatus === 'all' ||
-                         (filterStatus === 'active' && user.is_active) ||
-                         (filterStatus === 'inactive' && !user.is_active);
+      (filterStatus === 'active' && user.is_active) ||
+      (filterStatus === 'inactive' && !user.is_active);
 
     const matchesVeteran = filterVeteran === 'all' ||
-                          (filterVeteran === 'veteran' && user.is_veteran) ||
-                          (filterVeteran === 'non-veteran' && !user.is_veteran);
+      (filterVeteran === 'veteran' && user.is_veteran) ||
+      (filterVeteran === 'non-veteran' && !user.is_veteran);
 
     return matchesSearch && matchesStatus && matchesVeteran;
   });
@@ -225,13 +217,13 @@ export default function AdminUsers() {
   const handleEditUser = async () => {
     if (!selectedUser) return;
     setFormErrors([]);
-    
+
     const errors: string[] = [];
     if (!editUserForm.email) errors.push('Email is required');
     if (!editUserForm.username) errors.push('Username is required');
     if (!editUserForm.first_name) errors.push('First name is required');
     if (!editUserForm.last_name) errors.push('Last name is required');
-    
+
     if (errors.length > 0) {
       setFormErrors(errors);
       return;
@@ -239,7 +231,7 @@ export default function AdminUsers() {
 
     try {
       const response = await api.patch(`/api/auth/users/${selectedUser.id}/`, editUserForm);
-      
+
       setUsers(users.map(user =>
         user.id === selectedUser.id ? {
           ...user,
@@ -250,10 +242,10 @@ export default function AdminUsers() {
           is_staff: Boolean(response.data.is_staff),
           star_rating: response.data.star_rating || user.star_rating,
           // Only calculate veteran category for veterans who are NOT admins
-          veteran_category: (response.data.is_veteran && !response.data.is_superuser) ? getVeteranCategory(response.data.star_rating || user.star_rating || 0) : undefined
+          veteran_category: (response.data.is_veteran && !response.data.is_superuser) ? getVeteranCategoryFromStars(response.data.star_rating || user.star_rating || 0) : undefined
         } : user
       ));
-      
+
       setShowEditUserModal(false);
       setSelectedUser(null);
       setError('');
@@ -277,7 +269,7 @@ export default function AdminUsers() {
 
   const handleAddUser = async () => {
     setFormErrors([]);
-    
+
     const errors: string[] = [];
     if (!addUserForm.email) errors.push('Email is required');
     if (!addUserForm.username) errors.push('Username is required');
@@ -287,7 +279,7 @@ export default function AdminUsers() {
     if (addUserForm.password !== addUserForm.password_confirm) {
       errors.push('Passwords do not match');
     }
-    
+
     if (errors.length > 0) {
       setFormErrors(errors);
       return;
@@ -295,7 +287,7 @@ export default function AdminUsers() {
 
     try {
       const response = await api.post('/api/auth/users/', addUserForm);
-      
+
       setUsers([...users, {
         ...response.data,
         is_active: Boolean(response.data.is_active),
@@ -306,7 +298,7 @@ export default function AdminUsers() {
         // Only set veteran category for veterans who are NOT admins
         veteran_category: (response.data.is_veteran && !response.data.is_superuser) ? 'Bronze Veteran' : undefined
       }]);
-      
+
       setAddUserForm({
         email: '',
         username: '',
@@ -362,7 +354,7 @@ export default function AdminUsers() {
     setSelectedUser(user);
     setShowStarsModal(true);
     setLoadingStars(true);
-    
+
     try {
       const response = await api.get(`/api/auth/users/${user.id}/stars/`);
       setSelectedUserStars(response.data);
@@ -380,7 +372,7 @@ export default function AdminUsers() {
       console.warn('Date field is missing or empty:', dateString);
       return 'N/A';
     }
-    
+
     try {
       const date = new Date(dateString);
       if (isNaN(date.getTime())) {
@@ -577,11 +569,10 @@ export default function AdminUsers() {
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`badge ${
-                      user.is_active
+                    <span className={`badge ${user.is_active
                         ? 'bg-green-50 text-green-700 border-green-200'
                         : 'bg-red-50 text-red-700 border-red-200'
-                    }`}>
+                      }`}>
                       {user.is_active ? (
                         <><CheckCircle className="w-3 h-3 mr-1" /> Enabled</>
                       ) : (
@@ -590,13 +581,12 @@ export default function AdminUsers() {
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`badge ${
-                      user.is_superuser
+                    <span className={`badge ${user.is_superuser
                         ? 'bg-purple-50 text-purple-700 border-purple-200'
                         : user.is_veteran
-                        ? 'bg-blue-50 text-blue-700 border-blue-200'
-                        : 'bg-gray-50 text-gray-700 border-gray-200'
-                    }`}>
+                          ? 'bg-blue-50 text-blue-700 border-blue-200'
+                          : 'bg-gray-50 text-gray-700 border-gray-200'
+                      }`}>
                       {user.is_superuser ? (
                         <><Shield className="w-3 h-3 mr-1" /> Admin</>
                       ) : user.is_veteran ? (
@@ -606,7 +596,7 @@ export default function AdminUsers() {
                       )}
                     </span>
                   </td>
-                   <td className="px-6 py-4 whitespace-nowrap">
+                  <td className="px-6 py-4 whitespace-nowrap">
                     {/* Only show stars and category for veterans who are NOT admins */}
                     {user.is_veteran && !user.is_superuser ? (
                       <div className="space-y-1">
@@ -1001,7 +991,7 @@ export default function AdminUsers() {
 
               <div className="flex justify-end space-x-3 mt-8 pt-6 border-t border-gray-100">
                 <button
-                 onClick={() => {
+                  onClick={() => {
                     setShowEditUserModal(false);
                     setFormErrors([]);
                     setSelectedUser(null);
@@ -1118,9 +1108,8 @@ export default function AdminUsers() {
                   {selectedUserStars.map((star) => (
                     <div key={star.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-100 hover:bg-gray-100 transition-colors">
                       <div className="flex items-center space-x-4">
-                        <div className={`flex items-center justify-center w-12 h-12 rounded-xl ${
-                          star.event ? 'bg-blue-100' : 'bg-purple-100'
-                        }`}>
+                        <div className={`flex items-center justify-center w-12 h-12 rounded-xl ${star.event ? 'bg-blue-100' : 'bg-purple-100'
+                          }`}>
                           {star.event ? (
                             <Trophy className="w-6 h-6 text-blue-600" />
                           ) : (
@@ -1135,8 +1124,8 @@ export default function AdminUsers() {
                             </p>
                           </div>
                           <p className="text-xs text-gray-600 mt-0.5">
-                            {star.event 
-                              ? `Event Participation${star.event_title ? `: ${star.event_title}` : ` #${star.event}`}` 
+                            {star.event
+                              ? `Event Participation${star.event_title ? `: ${star.event_title}` : ` #${star.event}`}`
                               : `Peer Recognition${star.giver_name ? ` from ${star.giver_name}` : ''}`
                             }
                           </p>
@@ -1201,23 +1190,21 @@ export default function AdminUsers() {
                   </div>
                   <div>
                     <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Status</p>
-                    <span className={`badge ${
-                      selectedUser.is_active
+                    <span className={`badge ${selectedUser.is_active
                         ? 'bg-green-50 text-green-700 border-green-200'
                         : 'bg-red-50 text-red-700 border-red-200'
-                    }`}>
+                      }`}>
                       {selectedUser.is_active ? 'Enabled' : 'Disabled'}
                     </span>
                   </div>
                   <div>
                     <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Type</p>
-                    <span className={`badge ${
-                      selectedUser.is_superuser
+                    <span className={`badge ${selectedUser.is_superuser
                         ? 'bg-purple-50 text-purple-700 border-purple-200'
                         : selectedUser.is_veteran
-                        ? 'bg-blue-50 text-blue-700 border-blue-200'
-                        : 'bg-gray-50 text-gray-700 border-gray-200'
-                    }`}>
+                          ? 'bg-blue-50 text-blue-700 border-blue-200'
+                          : 'bg-gray-50 text-gray-700 border-gray-200'
+                      }`}>
                       {selectedUser.is_superuser ? 'Admin' : selectedUser.is_veteran ? 'Veteran' : 'Regular'}
                     </span>
                   </div>

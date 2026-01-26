@@ -9,7 +9,7 @@ import { useState } from 'react';
 interface PostCardProps {
   post: Post;
   onLike?: (postId: number) => void;
-  onComment?: (postId: number) => void;
+  onComment?: (postId: number, content: string) => void;
   onDelete?: (postId: number) => void;
   onGiveStar?: (userId: number) => void;
   currentUserId?: number;
@@ -35,7 +35,7 @@ export default function PostCard({
 
   const handleComment = () => {
     if (commentText.trim() && onComment) {
-      onComment(post.id);
+      onComment(post.id, commentText);
       setCommentText('');
       setShowCommentBox(false);
     }
@@ -108,12 +108,12 @@ export default function PostCard({
         <h3 className="text-base font-semibold text-gray-900 mb-2">{post.title}</h3>
       )}
       <p className="text-sm text-gray-700 mb-3 leading-relaxed whitespace-pre-wrap">{post.content}</p>
-      
+
       {/* Image */}
       {post.image && (
-        <img 
-          src={post.image} 
-          alt="Post" 
+        <img
+          src={post.image}
+          alt="Post"
           className="w-full rounded-lg mb-3 border border-gray-200 object-cover max-h-96"
         />
       )}
@@ -122,18 +122,17 @@ export default function PostCard({
       {showActions && (
         <>
           <div className="flex items-center space-x-4 pt-3 border-t border-gray-100">
-            <button 
+            <button
               onClick={handleLike}
-              className={`flex items-center space-x-2 px-3 py-2 rounded-lg transition-all ${
-                post.is_liked 
-                  ? 'text-red-600 bg-red-50' 
-                  : 'text-gray-600 hover:bg-gray-50'
-              }`}
+              className={`flex items-center space-x-2 px-3 py-2 rounded-lg transition-all ${post.is_liked
+                ? 'text-red-600 bg-red-50'
+                : 'text-gray-600 hover:bg-gray-50'
+                }`}
             >
               <Heart className={`w-4 h-4 ${post.is_liked ? 'fill-current' : ''}`} />
               <span className="text-sm font-medium">{post.likes_count || 0}</span>
             </button>
-            <button 
+            <button
               onClick={() => setShowCommentBox(!showCommentBox)}
               className="flex items-center space-x-2 px-3 py-2 text-gray-600 hover:bg-gray-50 rounded-lg transition-colors"
             >

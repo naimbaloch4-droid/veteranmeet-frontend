@@ -42,14 +42,43 @@ export function formatStarCount(stars: number): string {
 }
 
 export function getVeteranCategoryFromStars(stars: number): string {
-  if (stars >= 100000) return 'Eternal Sage';
-  if (stars >= 70000) return 'Platinum Veteran';
-  if (stars >= 65000) return 'Sapphire Veteran';
-  if (stars >= 60000) return 'Diamond Veteran';
-  if (stars >= 50000) return 'Golden Veteran';
-  if (stars >= 40000) return 'Ruby Veteran';
-  if (stars >= 25000) return 'Silver Veteran';
+  if (stars >= 25000) return 'Eternal Sage';
+  if (stars >= 18000) return 'Platinum Veteran';
+  if (stars >= 12000) return 'Sapphire Veteran';
+  if (stars >= 8000) return 'Diamond Veteran';
+  if (stars >= 5000) return 'Golden Veteran';
+  if (stars >= 3000) return 'Ruby Veteran';
+  if (stars >= 1500) return 'Gold Veteran';
+  if (stars >= 500) return 'Silver Veteran';
   return 'Bronze Veteran';
+}
+
+export function getNextVeteranThreshold(stars: number): { threshold: number, nextCategory: string } | null {
+  const thresholds = [
+    { threshold: 500, nextCategory: 'Silver Veteran' },
+    { threshold: 1500, nextCategory: 'Gold Veteran' },
+    { threshold: 3000, nextCategory: 'Ruby Veteran' },
+    { threshold: 5000, nextCategory: 'Golden Veteran' },
+    { threshold: 8000, nextCategory: 'Diamond Veteran' },
+    { threshold: 12000, nextCategory: 'Sapphire Veteran' },
+    { threshold: 18000, nextCategory: 'Platinum Veteran' },
+    { threshold: 25000, nextCategory: 'Eternal Sage' }
+  ];
+
+  return thresholds.find(t => stars < t.threshold) || null;
+}
+
+export function getVeteranProgress(stars: number): number {
+  const next = getNextVeteranThreshold(stars);
+  if (!next) return 100;
+
+  const categories = [0, 500, 1500, 3000, 5000, 8000, 12000, 18000, 25000];
+  const currentThreshold = categories.reverse().find(t => stars >= t) || 0;
+
+  const progessInLevel = stars - currentThreshold;
+  const levelRange = next.threshold - currentThreshold;
+
+  return Math.min(Math.round((progessInLevel / levelRange) * 100), 100);
 }
 
 export function getInitials(firstName?: string, lastName?: string, username?: string): string {
