@@ -63,6 +63,9 @@ export default function AdminDashboard() {
 
   const fetchDashboardStats = async () => {
     try {
+      console.log('Fetching from API URL:', process.env.NEXT_PUBLIC_API_URL);
+      console.log('Full URL:', `${process.env.NEXT_PUBLIC_API_URL}/api/hub/admin-overview/`);
+      
       // Use the new dedicated admin overview endpoint
       const overviewRes = await api.get('/api/hub/admin-overview/');
       

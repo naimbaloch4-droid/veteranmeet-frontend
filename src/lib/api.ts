@@ -18,6 +18,11 @@ const api = axios.create({
   withCredentials: true, // Important: sends cookies with requests
 });
 
+// Log API configuration for debugging (only in development/client side)
+if (typeof window !== 'undefined' && process.env.NODE_ENV !== 'production') {
+  console.log('[API Config] Base URL:', process.env.NEXT_PUBLIC_API_URL);
+}
+
 // Request interceptor - add Authorization header with token from cookie
 api.interceptors.request.use(
   (config) => {
@@ -38,6 +43,17 @@ api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
+
+    // Log errors for debugging
+    if (typeof window !== 'undefined') {
+      console.error('[API Error]', {
+        url: error.config?.url,
+        method: error.config?.method,
+        status: error.response?.status,
+        message: error.message,
+        baseURL: error.config?.baseURL,
+      });
+    }
 
     // If error is 401 and we haven't tried to refresh yet
     if (error.response?.status === 401 && !originalRequest._retry) {
