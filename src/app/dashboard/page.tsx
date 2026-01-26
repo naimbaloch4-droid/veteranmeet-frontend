@@ -51,15 +51,25 @@ interface User {
   veteran_category?: string;
 }
 
+interface Comment {
+  id: number;
+  author: User;
+  content: string;
+  created_at: string;
+}
+
 interface Post {
   id: number;
   title?: string;
   content: string;
   author: User;
   created_at: string;
+  updated_at: string;
   likes_count?: number;
   comments_count?: number;
   image?: string;
+  is_liked?: boolean;
+  comments?: Comment[];
 }
 
 interface Event {

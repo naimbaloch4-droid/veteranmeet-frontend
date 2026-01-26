@@ -28,6 +28,7 @@ import {
   Award as AwardIcon
 } from 'lucide-react';
 import StatCard from '@/components/StatCard';
+import { getVeteranCategoryFromStars } from '@/utils/veteranFormatters';
 
 interface User {
   id: number;
