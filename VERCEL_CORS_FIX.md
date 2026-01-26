@@ -49,8 +49,8 @@ MIDDLEWARE = [
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",  # Local development
     "http://localhost:3001",
-    "https://your-app.vercel.app",  # Replace with your actual Vercel domain
-    "https://your-app-*.vercel.app",  # For preview deployments
+    "https://veteranmeet-frontend.vercel.app",  # Your production Vercel domain
+    "https://veteranmeet-frontend-git-main-naimbaloch4-droid.vercel.app",  # Git deployments
 ]
 
 # Alternative: Allow all origins (NOT recommended for production)
