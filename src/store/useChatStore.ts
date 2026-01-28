@@ -69,12 +69,23 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     try {
       const response = await api.get('/api/chat/rooms/');
       const rooms = response.data.results || response.data || [];
-      
+
+      // Validate and sanitize room data
+      const validRooms = rooms.filter((room: any) => {
+        return room &&
+               typeof room.id === 'number' &&
+               room.participants &&
+               Array.isArray(room.participants) &&
+               room.participants.length > 0;
+      });
+
       // Sort rooms by updated_at (most recent first) so latest conversations appear at top
-      const sortedRooms = rooms.sort((a: ChatRoom, b: ChatRoom) => 
-        new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
-      );
-      
+      const sortedRooms = validRooms.sort((a: ChatRoom, b: ChatRoom) => {
+        const aTime = new Date(a.updated_at || a.created_at || 0).getTime();
+        const bTime = new Date(b.updated_at || b.created_at || 0).getTime();
+        return bTime - aTime;
+      });
+
       set({ rooms: sortedRooms, loading: false });
     } catch (error: any) {
       console.error('Failed to fetch chat rooms:', error);

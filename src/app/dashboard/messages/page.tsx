@@ -200,24 +200,21 @@ export default function MessagesPage() {
     if (messagesEndRef.current && !isUserScrolling && isNearBottom()) {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
+  }, [messages, isUserScrolling]);
 
-    // Auto-mark as read when viewing messages
+  // Auto-mark as read when viewing messages
+  useEffect(() => {
     if (currentRoom && messages.length > 0 && user) {
-      const unreadMessages = messages.filter(m => !m.is_read && m.sender.id != user.id);
+      const unreadMessages = messages.filter(m => !m.is_read && m.sender.id !== user.id);
 
       if (unreadMessages.length > 0) {
         // Mark individual messages as read
         unreadMessages.forEach(msg => {
           markMessageAsRead(msg.id);
         });
-        
-        // Also mark the room as read to clear unread count
-        if (currentRoom.unread_count && currentRoom.unread_count > 0) {
-          useChatStore.getState().markAsRead(currentRoom.id);
-        }
       }
     }
-  }, [messages, currentRoom, user, markMessageAsRead, isUserScrolling]);
+  }, [currentRoom?.id, messages, user?.id, markMessageAsRead]);
 
   const handleSendMessage = async () => {
     if (!messageText.trim() || !currentRoom) return;
