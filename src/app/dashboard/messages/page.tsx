@@ -55,6 +55,7 @@ export default function MessagesPage() {
     show: boolean;
     senderName: string;
     messagePreview: string;
+    roomId?: number;
   }>({ show: false, senderName: '', messagePreview: '' });
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -92,40 +93,68 @@ export default function MessagesPage() {
     };
   }, [fetchRooms, fetchFollowing, fetchOnlineUsers, currentRoom?.id, fetchMessages]);
 
-  // Detect new messages and show notification
+  // Detect new messages in OTHER rooms and show notification
   useEffect(() => {
-    if (messages.length > prevMessagesCountRef.current && user) {
-      const latestMessage = messages[messages.length - 1];
-      
-      // Only show notification for messages from others
-      if (latestMessage.sender.id !== user.id && currentRoom) {
-        const senderName = `${latestMessage.sender.first_name} ${latestMessage.sender.last_name}`.trim() || latestMessage.sender.username;
-        
-        setNewMessageNotification({
-          show: true,
-          senderName,
-          messagePreview: latestMessage.content
-        });
+    if (!user) return;
 
-        // Auto-hide after 4 seconds
-        setTimeout(() => {
-          setNewMessageNotification((prev) => ({ ...prev, show: false }));
-        }, 4000);
+    // Check for new messages in rooms OTHER than the currently open one
+    rooms.forEach(room => {
+      // Only show notification for rooms with unread messages that are NOT currently open
+      if (room.unread_count && room.unread_count > 0 && room.id !== currentRoom?.id) {
+        const other = getOtherParticipant(room);
+        if (other && room.last_message && room.last_message.sender.id !== user.id) {
+          const senderName = `${other.first_name} ${other.last_name}`.trim() || other.username;
+          
+          // Only show if we haven't shown this message before
+          const notificationKey = `${room.id}-${room.last_message.id}`;
+          const lastShownNotification = sessionStorage.getItem('lastNotification');
+          
+          if (lastShownNotification !== notificationKey) {
+            setNewMessageNotification({
+              show: true,
+              senderName,
+              messagePreview: room.last_message.content,
+              roomId: room.id
+            });
+
+            sessionStorage.setItem('lastNotification', notificationKey);
+
+            // Auto-hide after 5 seconds
+            setTimeout(() => {
+              setNewMessageNotification((prev) => ({ ...prev, show: false }));
+            }, 5000);
+          }
+          
+          // Only show one notification at a time
+          return;
+        }
       }
-    }
-    prevMessagesCountRef.current = messages.length;
-  }, [messages, user, currentRoom]);
+    });
+  }, [rooms, user, currentRoom]);
 
-  // Scroll to bottom when room changes (opening a chat)
+  // Scroll to bottom when room changes OR when messages load
   useEffect(() => {
-    if (currentRoom && messagesEndRef.current) {
-      // Immediate scroll to bottom when opening a chat
+    if (currentRoom && messages.length > 0 && messagesEndRef.current) {
+      // Force immediate scroll to bottom to show latest messages
+      // Use multiple attempts to ensure it works even if content is still loading
+      messagesEndRef.current.scrollIntoView({ behavior: 'instant' });
+      
       setTimeout(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'instant' });
-      }, 100);
+      }, 50);
+      
+      setTimeout(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'instant' });
+      }, 150);
+      
       setIsUserScrolling(false);
+      
+      // Clear notification if viewing the room from the notification
+      if (newMessageNotification.roomId === currentRoom.id) {
+        setNewMessageNotification((prev) => ({ ...prev, show: false }));
+      }
     }
-  }, [currentRoom?.id]);
+  }, [currentRoom?.id, messages.length, newMessageNotification.roomId]);
 
   // Check if user is near bottom of scroll
   const isNearBottom = () => {
@@ -177,9 +206,15 @@ export default function MessagesPage() {
       const unreadMessages = messages.filter(m => !m.is_read && m.sender.id != user.id);
 
       if (unreadMessages.length > 0) {
+        // Mark individual messages as read
         unreadMessages.forEach(msg => {
           markMessageAsRead(msg.id);
         });
+        
+        // Also mark the room as read to clear unread count
+        if (currentRoom.unread_count && currentRoom.unread_count > 0) {
+          useChatStore.getState().markAsRead(currentRoom.id);
+        }
       }
     }
   }, [messages, currentRoom, user, markMessageAsRead, isUserScrolling]);
@@ -260,10 +295,14 @@ export default function MessagesPage() {
         messagePreview={newMessageNotification.messagePreview}
         onClose={() => setNewMessageNotification((prev) => ({ ...prev, show: false }))}
         onClick={() => {
-          setNewMessageNotification((prev) => ({ ...prev, show: false }));
-          if (messagesEndRef.current) {
-            messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+          // Find and open the room for this notification
+          if (newMessageNotification.roomId) {
+            const room = rooms.find(r => r.id === newMessageNotification.roomId);
+            if (room) {
+              setCurrentRoom(room);
+            }
           }
+          setNewMessageNotification((prev) => ({ ...prev, show: false }));
         }}
       />
 

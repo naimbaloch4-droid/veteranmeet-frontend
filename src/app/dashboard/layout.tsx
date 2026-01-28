@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
@@ -25,6 +25,7 @@ import ToastContainer from '@/components/Toast';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import { useConfirmStore } from '@/store/useConfirmStore';
 import { useHeartbeat } from '@/hooks/useHeartbeat';
+import { useChatStore } from '@/store/useChatStore';
 
 const veteranNavItems = [
   {
@@ -78,10 +79,26 @@ export default function DashboardLayout({
   const pathname = usePathname();
   const user = typeof window !== 'undefined' ? getUser() : null;
   const { confirm } = useConfirmStore();
+  const { rooms, fetchRooms } = useChatStore();
 
   // Keep user's online status active by sending periodic heartbeats
   // This updates the last_activity field on the backend every 2 minutes
   useHeartbeat();
+
+  // Fetch chat rooms to get unread counts
+  useEffect(() => {
+    if (user) {
+      fetchRooms();
+      // Poll for updates every 10 seconds to keep unread count fresh
+      const interval = setInterval(() => {
+        fetchRooms();
+      }, 10000);
+      return () => clearInterval(interval);
+    }
+  }, [user, fetchRooms]);
+
+  // Calculate total unread messages
+  const totalUnreadMessages = rooms.reduce((total, room) => total + (room.unread_count || 0), 0);
 
   const handleLogout = () => {
     confirm({
@@ -131,23 +148,34 @@ export default function DashboardLayout({
             <nav className="flex-1 px-3 py-6 space-y-1 overflow-y-auto">
               {veteranNavItems.map((item) => {
                 const isActive = pathname === item.href;
+                const isMessages = item.href === '/dashboard/messages';
+                const showBadge = isMessages && totalUnreadMessages > 0;
+                
                 return (
                   <Link
                     key={item.name}
                     href={item.href}
-                    className={`flex items-center px-4 py-3.5 text-sm font-medium rounded-xl transition-all duration-200 group ${
+                    className={`flex items-center px-4 py-3.5 text-sm font-medium rounded-xl transition-all duration-200 group relative ${
                       isActive
                         ? 'bg-gray-800 text-white shadow-lg'
                         : 'text-gray-400 hover:bg-gray-800/50 hover:text-gray-100'
                     }`}
                     onClick={() => setSidebarOpen(false)}
                   >
-                    <div className={`p-1.5 rounded-lg ${
+                    <div className={`p-1.5 rounded-lg relative ${
                       isActive ? 'bg-gray-700' : 'bg-gray-800 group-hover:bg-gray-700'
                     }`}>
                       <item.icon className="w-4 h-4" />
+                      {showBadge && (
+                        <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full animate-pulse border border-gray-900"></span>
+                      )}
                     </div>
-                    <span className="ml-3">{item.name}</span>
+                    <span className="ml-3 flex-1">{item.name}</span>
+                    {showBadge && (
+                      <span className="flex items-center justify-center min-w-[20px] h-5 px-1.5 bg-red-500 text-white text-[10px] font-black rounded-full animate-pulse">
+                        {totalUnreadMessages > 99 ? '99+' : totalUnreadMessages}
+                      </span>
+                    )}
                   </Link>
                 );
               })}
@@ -181,10 +209,17 @@ export default function DashboardLayout({
               </button>
 
               <div className="flex items-center space-x-4 ml-auto">
-                <button className="relative p-2 text-gray-400 hover:text-gray-600 transition-colors">
+                <Link href="/dashboard/messages" className="relative p-2 text-gray-400 hover:text-gray-600 transition-colors">
                   <Bell className="w-5 h-5" />
-                  <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
-                </button>
+                  {totalUnreadMessages > 0 && (
+                    <>
+                      <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
+                      <span className="absolute -top-1 -right-1 flex items-center justify-center min-w-[18px] h-[18px] px-1 bg-red-500 text-white text-[9px] font-black rounded-full">
+                        {totalUnreadMessages > 9 ? '9+' : totalUnreadMessages}
+                      </span>
+                    </>
+                  )}
+                </Link>
                 <div className="text-right">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">
                     {user?.is_veteran ? 'Veteran' : 'Member'}

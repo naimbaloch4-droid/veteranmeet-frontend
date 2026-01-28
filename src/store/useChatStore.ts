@@ -69,7 +69,13 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     try {
       const response = await api.get('/api/chat/rooms/');
       const rooms = response.data.results || response.data || [];
-      set({ rooms, loading: false });
+      
+      // Sort rooms by updated_at (most recent first) so latest conversations appear at top
+      const sortedRooms = rooms.sort((a: ChatRoom, b: ChatRoom) => 
+        new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+      );
+      
+      set({ rooms: sortedRooms, loading: false });
     } catch (error: any) {
       console.error('Failed to fetch chat rooms:', error);
       set({ error: error.response?.data?.detail || 'Failed to load chats', loading: false });
@@ -84,8 +90,13 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       });
       const messages = response.data.results || response.data || [];
       
+      // Sort messages by created_at (oldest first) to ensure correct display order
+      const sortedMessages = messages.sort((a: Message, b: Message) => 
+        new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      );
+      
       // Add status to existing messages
-      const messagesWithStatus = messages.map((msg: Message) => ({
+      const messagesWithStatus = sortedMessages.map((msg: Message) => ({
         ...msg,
         status: msg.is_read ? 'seen' : 'delivered' as MessageStatus
       }));
