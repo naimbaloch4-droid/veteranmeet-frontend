@@ -89,7 +89,8 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       set({ rooms: sortedRooms, loading: false });
     } catch (error: any) {
       console.error('Failed to fetch chat rooms:', error);
-      set({ error: error.response?.data?.detail || 'Failed to load chats', loading: false });
+      // Don't set error state to avoid React errors
+      set({ rooms: [], loading: false });
     }
   },
 

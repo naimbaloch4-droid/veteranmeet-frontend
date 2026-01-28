@@ -85,13 +85,13 @@ export default function MessagesPage() {
       if (currentRoom) {
         fetchMessages(currentRoom.id);
       }
-    }, 4000);
+    }, 8000); // Increased to 8 seconds to reduce frequency
 
     return () => {
       window.removeEventListener('resize', checkMobile);
       clearInterval(pollInterval);
     };
-  }, [fetchRooms, fetchFollowing, fetchOnlineUsers, currentRoom?.id, fetchMessages]);
+  }, []); // Empty dependency array - run once on mount, Zustand functions are stable
 
   // Detect new messages in OTHER rooms and show notification
   useEffect(() => {
@@ -274,8 +274,9 @@ export default function MessagesPage() {
   };
 
   const filteredRooms = (rooms || []).filter(room => {
+    if (!room || !room.participants || room.participants.length === 0) return false;
     const other = getOtherParticipant(room);
-    if (!other) return false;
+    if (!other || !other.first_name || !other.last_name || !other.username) return false;
     const fullName = `${other.first_name} ${other.last_name}`.toLowerCase();
     const username = other.username.toLowerCase();
     return fullName.includes(searchQuery.toLowerCase()) || username.includes(searchQuery.toLowerCase());
@@ -345,18 +346,15 @@ export default function MessagesPage() {
               </div>
             ) : filteredRooms.length > 0 ? (
               <div className="py-2 px-3 space-y-1">
-                {filteredRooms.map((room) => {
+                {filteredRooms.map((room, index) => {
                   const other = getOtherParticipant(room);
                   const isActive = currentRoom?.id === room.id;
                   const isOnline = other ? isUserOnline(other.id) : false;
                   if (!other) return null;
 
                   return (
-                    <motion.button
-                      key={room.id}
-                      initial={false}
-                      whileHover={{ scale: 1.01 }}
-                      whileTap={{ scale: 0.99 }}
+                    <button
+                      key={`room-${room.id}-${index}`}
                       onClick={() => setCurrentRoom(room)}
                       className={`w-full p-4 rounded-2xl text-left transition-all relative ${isActive
                         ? 'bg-blue-50/80 shadow-sm border border-blue-100/50'
@@ -367,7 +365,7 @@ export default function MessagesPage() {
                         <div className="relative">
                           <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-lg font-bold shadow-sm ${isActive ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-100'
                             }`}>
-                            {getInitials(other.first_name, other.last_name, other.username)}
+                            {getInitials(other?.first_name || '', other?.last_name || '', other?.username || '')}
                           </div>
                           <div className="absolute -bottom-1 -right-1">
                             <OnlineStatusIndicator isOnline={isOnline} size="md" />
@@ -377,7 +375,7 @@ export default function MessagesPage() {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center justify-between mb-0.5">
                             <h3 className={`text-sm font-bold truncate ${isActive ? 'text-blue-900' : 'text-slate-900'}`}>
-                              {other.first_name} {other.last_name}
+                              {other?.first_name || ''} {other?.last_name || ''}
                             </h3>
                             {room.last_message && (
                               <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
@@ -392,18 +390,14 @@ export default function MessagesPage() {
                               {room.last_message ? room.last_message.content : 'No messages yet'}
                             </p>
                             {room.unread_count && room.unread_count > 0 && !isActive && (
-                              <motion.span
-                                initial={{ scale: 0 }}
-                                animate={{ scale: 1 }}
-                                className="flex items-center justify-center min-w-[18px] h-[18px] px-1 bg-blue-600 text-[10px] font-black text-white rounded-full"
-                              >
+                              <span className="flex items-center justify-center min-w-[18px] h-[18px] px-1 bg-blue-600 text-[10px] font-black text-white rounded-full">
                                 {room.unread_count}
-                              </motion.span>
+                              </span>
                             )}
                           </div>
                         </div>
                       </div>
-                    </motion.button>
+                    </button>
                   );
                 })}
               </div>
