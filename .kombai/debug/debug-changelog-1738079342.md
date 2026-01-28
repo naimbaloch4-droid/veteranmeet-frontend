@@ -27,8 +27,17 @@ When `fetchRooms()` updates the store state, Zustand creates new function refere
 - **Fixed:** `}, []);` (empty dependency array for mount-only execution)
 - **Revert:** Restore the original dependency array with all function dependencies
 
+### 2. Fixed infinite loop in dashboard layout useEffect (ROOT CAUSE)
+- **File:** `src/app/dashboard/layout.tsx`
+- **Change:** Removed `fetchRooms` from useEffect dependency array (line 98)
+- **Original:** `}, [user, fetchRooms]);`
+- **Fixed:** `}, [user?.id]);` (only depend on user ID changes for login/logout scenarios)
+- **Revert:** Restore the original dependency array `[user, fetchRooms]`
+- **Note:** This was the main source of the infinite loop since the layout wraps all dashboard pages
+
 ## Revert Status
 - [ ] Change 1 - Fixed useEffect dependency array in messages page
+- [ ] Change 2 - Fixed useEffect dependency array in dashboard layout (PRIMARY FIX)
 
 ## Notes
 - Zustand store functions are stable and should not be included in dependency arrays

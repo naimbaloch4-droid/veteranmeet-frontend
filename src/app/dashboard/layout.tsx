@@ -95,7 +95,7 @@ export default function DashboardLayout({
       }, 10000);
       return () => clearInterval(interval);
     }
-  }, [user, fetchRooms]);
+  }, [user?.id]); // Only re-run when user ID changes (login/logout), not on every store update
 
   // Calculate total unread messages
   const totalUnreadMessages = rooms.reduce((total, room) => total + (room.unread_count || 0), 0);
