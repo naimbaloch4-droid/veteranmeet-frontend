@@ -1,0 +1,138 @@
+/* Professional Notification Badge Animations */
+
+@keyframes badge-pop {
+  0% {
+    transform: scale(0.8);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.1);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes ping-smooth {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  75%, 100% {
+    transform: scale(2);
+    opacity: 0;
+  }
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 10px rgba(239, 68, 68, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(239, 68, 68, 0.6);
+  }
+}
+
+/* Badge number animation */
+@keyframes count-change {
+  0% {
+    transform: scale(0.9) translateY(-2px);
+    opacity: 0.7;
+  }
+  50% {
+    transform: scale(1.1) translateY(0);
+  }
+  100% {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+  }
+}
+
+/* Notification dot pulse */
+@keyframes dot-pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.2);
+    opacity: 0.8;
+  }
+}
+
+/* Subtle shake for attention */
+@keyframes subtle-shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-2px); }
+  75% { transform: translateX(2px); }
+}
+
+/* Apply animations to notification badges */
+.notification-badge {
+  animation: badge-pop 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+.notification-badge-ping {
+  animation: ping-smooth 1.5s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+.notification-dot {
+  animation: dot-pulse 2s ease-in-out infinite;
+}
+
+.notification-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+/* Smooth badge count transitions */
+.badge-count {
+  transition: transform 0.2s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+.badge-count-enter {
+  animation: count-change 0.3s ease-out;
+}
+
+/* Hover effects for notification items */
+.notification-item:hover {
+  transform: translateX(2px);
+  transition: transform 0.2s ease-out;
+}
+
+/* Attention grabber for new messages */
+.has-new-messages {
+  animation: subtle-shake 0.5s ease-in-out;
+}
+
+/* Responsive badge sizing */
+@media (max-width: 1024px) {
+  .notification-badge {
+    min-width: 18px;
+    height: 18px;
+    font-size: 9px;
+  }
+}
+
+/* Accessibility - Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  .notification-badge,
+  .notification-badge-ping,
+  .notification-dot,
+  .notification-glow,
+  .badge-count-enter,
+  .has-new-messages {
+    animation: none !important;
+  }
+  
+  .notification-item:hover {
+    transform: none;
+  }
+}
+
+/* Dark mode optimizations (for future use) */
+@media (prefers-color-scheme: dark) {
+  .notification-badge {
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.6);
+  }
+}

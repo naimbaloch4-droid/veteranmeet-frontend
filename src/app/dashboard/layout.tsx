@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import './notifications.css';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
@@ -23,9 +24,11 @@ import ProtectedRoute from '@/components/ProtectedRoute';
 import { logout, getUser } from '@/lib/auth';
 import ToastContainer from '@/components/Toast';
 import ConfirmDialog from '@/components/ConfirmDialog';
+import NotificationSettings from '@/components/NotificationSettings';
 import { useConfirmStore } from '@/store/useConfirmStore';
 import { useHeartbeat } from '@/hooks/useHeartbeat';
 import { useChatStore } from '@/store/useChatStore';
+import { useMessageNotifications } from '@/hooks/useMessageNotifications';
 
 const veteranNavItems = [
   {
@@ -76,6 +79,7 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [notificationSettingsOpen, setNotificationSettingsOpen] = useState(false);
   const pathname = usePathname();
   const user = typeof window !== 'undefined' ? getUser() : null;
   const { confirm } = useConfirmStore();
@@ -100,6 +104,13 @@ export default function DashboardLayout({
   // Calculate total unread messages
   const totalUnreadMessages = rooms.reduce((total, room) => total + (room.unread_count || 0), 0);
 
+  // Enable comprehensive notifications (tab title, sound, desktop)
+  useMessageNotifications(totalUnreadMessages, {
+    enableSound: true,
+    enableDesktopNotifications: true,
+    enableTabTitleNotifications: true,
+  });
+
   const handleLogout = () => {
     confirm({
       title: 'Confirm Logout',
@@ -118,6 +129,10 @@ export default function DashboardLayout({
       <>
         <ToastContainer />
         <ConfirmDialog />
+        <NotificationSettings 
+          isOpen={notificationSettingsOpen}
+          onClose={() => setNotificationSettingsOpen(false)}
+        />
         <div className="flex min-h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-indigo-50">
         {/* Mobile sidebar overlay */}
         {sidebarOpen && (
@@ -167,22 +182,45 @@ export default function DashboardLayout({
                     }`}>
                       <item.icon className="w-4 h-4" />
                       {showBadge && (
-                        <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full animate-pulse border border-gray-900"></span>
+                        <>
+                          {/* Pulsing ring effect for emphasis */}
+                          <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500/30 rounded-full animate-ping"></span>
+                          {/* Solid dot */}
+                          <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-gray-900 shadow-lg shadow-red-500/50"></span>
+                        </>
                       )}
                     </div>
                     <span className="ml-3 flex-1">{item.name}</span>
                     {showBadge && (
-                      <span className="flex items-center justify-center min-w-[20px] h-5 px-1.5 bg-red-500 text-white text-[10px] font-black rounded-full animate-pulse">
+                      <motion.span
+                        key={totalUnreadMessages}
+                        initial={{ scale: 0.8, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        className="flex items-center justify-center min-w-[22px] h-[22px] px-2 bg-gradient-to-br from-red-500 to-red-600 text-white text-[11px] font-black rounded-full shadow-lg shadow-red-500/40 ring-2 ring-red-400/30"
+                      >
                         {totalUnreadMessages > 99 ? '99+' : totalUnreadMessages}
-                      </span>
+                      </motion.span>
+                    )}
+                    {/* Glow effect when active and has unread */}
+                    {showBadge && !isActive && (
+                      <div className="absolute inset-0 bg-red-500/5 rounded-xl pointer-events-none" />
                     )}
                   </Link>
                 );
               })}
             </nav>
 
-            {/* Logout */}
-            <div className="p-3 border-t border-gray-800">
+            {/* Notification Settings & Logout */}
+            <div className="p-3 border-t border-gray-800 space-y-1">
+              <button
+                onClick={() => setNotificationSettingsOpen(true)}
+                className="flex items-center w-full px-4 py-3.5 text-sm font-medium text-gray-400 rounded-xl hover:bg-gray-800/50 hover:text-gray-100 transition-all duration-200 group"
+              >
+                <div className="p-1.5 rounded-lg bg-gray-800 group-hover:bg-gray-700">
+                  <Bell className="w-4 h-4" />
+                </div>
+                <span className="ml-3">Notifications</span>
+              </button>
               <button
                 onClick={handleLogout}
                 className="flex items-center w-full px-4 py-3.5 text-sm font-medium text-gray-400 rounded-xl hover:bg-red-900/20 hover:text-red-400 transition-all duration-200 group"
@@ -209,14 +247,22 @@ export default function DashboardLayout({
               </button>
 
               <div className="flex items-center space-x-4 ml-auto">
-                <Link href="/dashboard/messages" className="relative p-2 text-gray-400 hover:text-gray-600 transition-colors">
-                  <Bell className="w-5 h-5" />
+                <Link href="/dashboard/messages" className="relative p-2.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-xl transition-all group">
+                  <Bell className="w-5 h-5 group-hover:scale-110 transition-transform" />
                   {totalUnreadMessages > 0 && (
                     <>
-                      <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
-                      <span className="absolute -top-1 -right-1 flex items-center justify-center min-w-[18px] h-[18px] px-1 bg-red-500 text-white text-[9px] font-black rounded-full">
+                      {/* Animated ring for attention */}
+                      <span className="absolute top-1.5 right-1.5 w-3 h-3 bg-red-500/40 rounded-full animate-ping"></span>
+                      {/* Badge with enhanced styling */}
+                      <motion.span
+                        key={totalUnreadMessages}
+                        initial={{ scale: 0.5, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        transition={{ type: 'spring', stiffness: 500, damping: 25 }}
+                        className="absolute -top-1 -right-1 flex items-center justify-center min-w-[20px] h-[20px] px-1.5 bg-gradient-to-br from-red-500 to-red-600 text-white text-[10px] font-black rounded-full shadow-lg shadow-red-500/50 ring-2 ring-white"
+                      >
                         {totalUnreadMessages > 9 ? '9+' : totalUnreadMessages}
-                      </span>
+                      </motion.span>
                     </>
                   )}
                 </Link>
