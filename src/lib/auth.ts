@@ -61,6 +61,20 @@ export const logout = async (): Promise<void> => {
   if (typeof window === 'undefined') return;
   
   try {
+    // First, mark user as offline in chat system
+    // This ensures they immediately appear offline to other users
+    try {
+      await fetch('/api/chat/mark-offline', { 
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
+    } catch (offlineError) {
+      // Don't block logout if marking offline fails
+      console.warn('Failed to mark user as offline:', offlineError);
+    }
+
     // Call logout API to clear httpOnly cookies
     await fetch('/api/auth/logout', { 
       method: 'POST',

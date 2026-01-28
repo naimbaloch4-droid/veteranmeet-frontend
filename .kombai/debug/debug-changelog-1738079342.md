@@ -35,9 +35,25 @@ When `fetchRooms()` updates the store state, Zustand creates new function refere
 - **Revert:** Restore the original dependency array `[user, fetchRooms]`
 - **Note:** This was the main source of the infinite loop since the layout wraps all dashboard pages
 
+## Additional Feature: Offline Status on Logout
+
+### 3. Added offline status marking on logout
+- **File:** `src/app/api/chat/mark-offline/route.ts` (NEW FILE)
+- **Change:** Created new API route to mark user as offline when logging out
+- **Revert:** Delete entire file
+
+### 4. Updated logout function to mark user offline
+- **File:** `src/lib/auth.ts`
+- **Change:** Added call to `/api/chat/mark-offline` before logout (lines 63-71)
+- **Original:** Directly called logout API without marking offline
+- **Fixed:** Now calls mark-offline endpoint first, then proceeds with logout
+- **Revert:** Remove the mark-offline fetch call (lines 63-71)
+
 ## Revert Status
 - [ ] Change 1 - Fixed useEffect dependency array in messages page
 - [ ] Change 2 - Fixed useEffect dependency array in dashboard layout (PRIMARY FIX)
+- [ ] Change 3 - Mark offline API route (NEW FEATURE)
+- [ ] Change 4 - Updated logout to mark offline (NEW FEATURE)
 
 ## Notes
 - Zustand store functions are stable and should not be included in dependency arrays
