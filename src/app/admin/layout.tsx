@@ -21,6 +21,7 @@ import { logout } from '@/lib/auth';
 import ToastContainer from '@/components/Toast';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import { useConfirmStore } from '@/store/useConfirmStore';
+import { useHeartbeat } from '@/hooks/useHeartbeat';
 
 const adminNavItems = [
   {
@@ -68,6 +69,9 @@ export default function AdminLayout({
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const pathname = usePathname();
   const { confirm } = useConfirmStore();
+
+  // Keep admin's online status active by sending periodic heartbeats
+  useHeartbeat();
 
   const handleLogout = () => {
     confirm({

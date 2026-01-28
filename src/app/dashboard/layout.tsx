@@ -24,6 +24,7 @@ import { logout, getUser } from '@/lib/auth';
 import ToastContainer from '@/components/Toast';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import { useConfirmStore } from '@/store/useConfirmStore';
+import { useHeartbeat } from '@/hooks/useHeartbeat';
 
 const veteranNavItems = [
   {
@@ -77,6 +78,10 @@ export default function DashboardLayout({
   const pathname = usePathname();
   const user = typeof window !== 'undefined' ? getUser() : null;
   const { confirm } = useConfirmStore();
+
+  // Keep user's online status active by sending periodic heartbeats
+  // This updates the last_activity field on the backend every 2 minutes
+  useHeartbeat();
 
   const handleLogout = () => {
     confirm({
