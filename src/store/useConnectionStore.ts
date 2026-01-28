@@ -68,32 +68,67 @@ export const useConnectionStore = create<ConnectionStore>((set, get) => ({
   },
 
   followUser: async (userId: number) => {
-    try {
-      await api.post(`/api/auth/follow/${userId}/`);
-      
-      // Add to following list
-      const userResponse = await api.get(`/api/auth/user/${userId}/`);
-      const user = userResponse.data;
-      
+    // Optimistic UI update - find user from suggestions
+    const user = get().suggestions.find(u => u.id === userId);
+    
+    if (user) {
+      // Immediately update UI
       set((state) => ({
         following: [...state.following, user],
         suggestions: state.suggestions.filter(u => u.id !== userId)
       }));
+    }
+    
+    try {
+      // Make API call
+      const response = await api.post(`/api/auth/follow/${userId}/`);
+      
+      // If user wasn't in suggestions, fetch their data
+      if (!user) {
+        const userResponse = await api.get(`/api/auth/user/${userId}/`);
+        const fetchedUser = userResponse.data;
+        
+        set((state) => ({
+          following: [...state.following.filter(u => u.id !== userId), fetchedUser],
+          suggestions: state.suggestions.filter(u => u.id !== userId)
+        }));
+      }
     } catch (error: any) {
       console.error('Failed to follow user:', error);
+      
+      // Revert optimistic update on error
+      if (user) {
+        set((state) => ({
+          following: state.following.filter(u => u.id !== userId),
+          suggestions: [...state.suggestions, user]
+        }));
+      }
+      
       throw error;
     }
   },
 
   unfollowUser: async (userId: number) => {
-    try {
-      await api.post(`/api/auth/follow/${userId}/`); // Toggle endpoint
-      
+    // Optimistic UI update - find user from following
+    const user = get().following.find(u => u.id === userId);
+    const previousFollowing = get().following;
+    
+    if (user) {
+      // Immediately update UI
       set((state) => ({
         following: state.following.filter(u => u.id !== userId)
       }));
+    }
+    
+    try {
+      // Make API call (toggle endpoint)
+      await api.post(`/api/auth/follow/${userId}/`);
     } catch (error: any) {
       console.error('Failed to unfollow user:', error);
+      
+      // Revert optimistic update on error
+      set({ following: previousFollowing });
+      
       throw error;
     }
   },

@@ -15,6 +15,7 @@ import {
   X
 } from 'lucide-react';
 import StatCard from '@/components/StatCard';
+import { useToastStore } from '@/store/useToastStore';
 
 interface Report {
   id: number;
@@ -38,6 +39,7 @@ interface Report {
 }
 
 export default function Reports() {
+  const { success, error: showError } = useToastStore();
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -106,9 +108,10 @@ export default function Reports() {
         report.id === reportId ? { ...report, status: newStatus } : report
       ));
       setShowDetailModal(false);
+      success('Report status updated successfully');
     } catch (err: any) {
       console.error('Failed to update report:', err);
-      alert('Failed to update report status');
+      showError('Failed to update report status');
     }
   };
 
@@ -117,9 +120,10 @@ export default function Reports() {
     
     try {
       setReports(reports.filter(r => r.id !== reportId));
+      success('Report deleted successfully');
     } catch (err: any) {
       console.error('Failed to delete report:', err);
-      alert('Failed to delete report');
+      showError('Failed to delete report');
     }
   };
 

@@ -56,9 +56,12 @@ export const useGroupStore = create<GroupStore>((set, get) => ({
         params: filters
       });
       const groups = response.data.results || response.data || [];
+      console.log('[Support Groups] Fetched groups:', groups.length, 'groups');
+      console.log('[Support Groups] Groups data:', groups);
       set({ groups, loading: false });
     } catch (error: any) {
-      console.error('Failed to fetch groups:', error);
+      console.error('[Support Groups] Failed to fetch groups:', error);
+      console.error('[Support Groups] Error details:', error.response?.data);
       set({ error: error.response?.data?.detail || 'Failed to load groups', loading: false });
     }
   },
@@ -68,9 +71,11 @@ export const useGroupStore = create<GroupStore>((set, get) => ({
     try {
       const response = await api.get('/api/support-groups/my-groups/');
       const groups = response.data.results || response.data || [];
+      console.log('[Support Groups] Fetched my groups:', groups.length, 'groups');
       set({ myGroups: groups, loading: false });
     } catch (error: any) {
-      console.error('Failed to fetch my groups:', error);
+      console.error('[Support Groups] Failed to fetch my groups:', error);
+      console.error('[Support Groups] Error details:', error.response?.data);
       set({ error: error.response?.data?.detail || 'Failed to load your groups', loading: false });
     }
   },

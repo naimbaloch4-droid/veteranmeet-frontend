@@ -40,6 +40,7 @@ import {
 import { useConnectionStore } from '@/store/useConnectionStore';
 import { usePostStore } from '@/store/usePostStore';
 import PostCard from '@/components/PostCard';
+import { useToastStore } from '@/store/useToastStore';
 
 interface User {
   id: number;
@@ -174,11 +175,11 @@ export default function Dashboard() {
       const statsRes = await api.get('/api/hub/stats/');
       setUserStats(statsRes.data);
 
-      // SILENT SYNC: Fetch star history and my posts in background
+      // Fetch star history and my posts in background
       if (userData.is_veteran) {
         api.get(`/api/auth/users/${userData.id}/stars/`).then(res => {
           setUserStars(res.data);
-        }).catch(e => console.warn('[Dashboard] Star sync failed:', e));
+        }).catch(() => {});
 
         // Fetch My Posts
         setLoadingMyPosts(true);
@@ -186,8 +187,7 @@ export default function Dashboard() {
           const all = res.data.results || res.data || [];
           setMyPosts(all.filter((p: any) => p.author.id === userData.id));
           setLoadingMyPosts(false);
-        }).catch(e => {
-          console.warn('[Dashboard] My Posts fetch failed:', e);
+        }).catch(() => {
           setLoadingMyPosts(false);
         });
       }
@@ -320,24 +320,20 @@ export default function Dashboard() {
 
     try {
       const response = await api.post(`/api/events/${eventId}/join/`);
-      const starsEarned = response.data?.stars_earned || starPoints;
+      const starsEarned = response.data?.stars_earned ?? response.data?.star_points ?? starPoints;
 
       // Sync with exact server count if available
       fetchDashboardData();
-      alert(`Successfully joined event! You earned ${starsEarned} stars!`);
+      useToastStore.getState().success(`Successfully joined event! You earned ${starsEarned} ${starsEarned === 1 ? 'star' : 'stars'}!`);
     } catch (err: any) {
-      console.warn('[Dashboard] Join Event API Status:', err.response?.status);
-
       if (err.response?.status === 500) {
-        // If it's a 500, we keep the optimistic stars because the join likely worked
-        // but the notification/reward logic crashed.
-        alert('Joined successfully! Your stars have been updated.');
+        useToastStore.getState().success('Joined successfully! Your stars have been updated.');
         fetchDashboardData();
       } else {
-        // For 4xx errors (like "already joined"), revert the optimistic update
+        // Revert the optimistic update for client errors
         setUserStats(previousStats);
         setDashboardData(previousDashboardData);
-        alert(err.response?.data?.detail || 'Could not join event at this time.');
+        useToastStore.getState().error(err.response?.data?.detail || 'Could not join event at this time.');
       }
     }
   };
@@ -364,12 +360,12 @@ export default function Dashboard() {
 
     try {
       await api.post(`/api/auth/give-star/${userId}/`);
-      alert('Star given! You have recognized a fellow Veteran 🎖️');
+      useToastStore.getState().success('Star given! You have recognized a fellow Veteran 🎖️');
       fetchDashboardData();
     } catch (err: any) {
       console.error('Failed to give star:', err);
       // Revert if it fails (not optimistic in the hard sense for errors, but good enough)
-      alert(err.response?.data?.detail || 'Failed to give star. Please try again.');
+      useToastStore.getState().error(err.response?.data?.detail || 'Failed to give star. Please try again.');
     }
   };
 

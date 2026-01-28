@@ -18,6 +18,9 @@ import {
 import { motion } from 'framer-motion';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import { logout } from '@/lib/auth';
+import ToastContainer from '@/components/Toast';
+import ConfirmDialog from '@/components/ConfirmDialog';
+import { useConfirmStore } from '@/store/useConfirmStore';
 
 const adminNavItems = [
   {
@@ -64,15 +67,27 @@ export default function AdminLayout({
 }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const pathname = usePathname();
+  const { confirm } = useConfirmStore();
 
   const handleLogout = () => {
-    logout();
-    window.location.href = '/login';
+    confirm({
+      title: 'Confirm Logout',
+      message: 'Are you sure you want to logout? You will need to sign in again to access the admin panel.',
+      confirmText: 'Logout',
+      cancelText: 'Cancel',
+      type: 'warning',
+      onConfirm: () => {
+        logout();
+      }
+    });
   };
 
   return (
     <ProtectedRoute>
-      <div className="flex min-h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-indigo-50">
+      <>
+        <ToastContainer />
+        <ConfirmDialog />
+        <div className="flex min-h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-indigo-50">
         {/* Mobile sidebar overlay */}
         {sidebarOpen && (
           <div
@@ -169,6 +184,7 @@ export default function AdminLayout({
           </main>
         </div>
       </div>
+      </>
     </ProtectedRoute>
   );
 }

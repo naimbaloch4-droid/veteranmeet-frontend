@@ -12,6 +12,7 @@ import {
   XCircle,
   Megaphone
 } from 'lucide-react';
+import { useToastStore } from '@/store/useToastStore';
 
 interface Post {
   id: number;
@@ -52,6 +53,7 @@ interface Announcement {
 type TabType = 'posts' | 'events' | 'announcements';
 
 export default function ContentModeration() {
+  const { success, error: showError } = useToastStore();
   const [activeTab, setActiveTab] = useState<TabType>('posts');
   const [posts, setPosts] = useState<Post[]>([]);
   const [events, setEvents] = useState<Event[]>([]);
@@ -127,9 +129,10 @@ export default function ContentModeration() {
     try {
       await api.delete(`/api/posts/${postId}/`);
       setPosts(posts.filter(p => p.id !== postId));
+      success('Post deleted successfully');
     } catch (err: any) {
       console.error('Failed to delete post:', err);
-      alert('Failed to delete post');
+      showError('Failed to delete post');
     }
   };
 
@@ -139,9 +142,10 @@ export default function ContentModeration() {
     try {
       await api.delete(`/api/events/${eventId}/`);
       setEvents(events.filter(e => e.id !== eventId));
+      success('Event deleted successfully');
     } catch (err: any) {
       console.error('Failed to delete event:', err);
-      alert('Failed to delete event');
+      showError('Failed to delete event');
     }
   };
 
@@ -153,9 +157,10 @@ export default function ContentModeration() {
       setAnnouncements([response.data, ...announcements]);
       setNewAnnouncement({ title: '', message: '', priority: 'normal' });
       setShowAnnouncementForm(false);
+      success('Announcement created successfully');
     } catch (err: any) {
       console.error('Failed to create announcement:', err);
-      alert('Failed to create announcement');
+      showError('Failed to create announcement');
     }
   };
 

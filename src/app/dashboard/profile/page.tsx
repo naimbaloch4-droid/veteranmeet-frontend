@@ -6,6 +6,7 @@ import { motion } from 'framer-motion';
 import { getUser } from '@/lib/auth';
 import { getVeteranCategoryFromStars, getVeteranCategoryColor, getInitials, formatDate } from '@/utils/veteranFormatters';
 import api from '@/lib/api';
+import { useToastStore } from '@/store/useToastStore';
 
 interface Profile {
   bio?: string;
@@ -16,6 +17,7 @@ interface Profile {
 }
 
 export default function ProfilePage() {
+  const { success, error: showError } = useToastStore();
   const [user, setUser] = useState<any>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [stats, setStats] = useState<any>(null);
@@ -53,10 +55,10 @@ export default function ProfilePage() {
       await api.put('/api/auth/user/profile/', editForm);
       setProfile(editForm);
       setIsEditing(false);
-      alert('Profile updated successfully!');
+      success('Profile updated successfully!');
     } catch (error: any) {
       console.error('Failed to update profile:', error);
-      alert(error.response?.data?.detail || 'Failed to update profile');
+      showError(error.response?.data?.detail || 'Failed to update profile');
     }
   };
 

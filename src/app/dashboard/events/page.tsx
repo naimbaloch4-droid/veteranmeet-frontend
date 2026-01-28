@@ -6,9 +6,11 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useEventStore } from '@/store/useEventStore';
 import EventCard from '@/components/EventCard';
 import { getUser } from '@/lib/auth';
+import { useToastStore } from '@/store/useToastStore';
 
 export default function EventsPage() {
   const { events, loading, fetchEvents, createEvent, joinEvent, leaveEvent, deleteEvent } = useEventStore();
+  const { success, error: showError } = useToastStore();
   const [user, setUser] = useState<any>(null);
   const [showCreateEvent, setShowCreateEvent] = useState(false);
   const [filterType, setFilterType] = useState<string>('all');
@@ -50,6 +52,7 @@ export default function EventsPage() {
         event_type: 'Outdoor'
       });
       setShowCreateEvent(false);
+      success('Event created successfully!');
       fetchEvents(1);
     } catch (error: any) {
       console.error('Failed to create event:', error);
@@ -60,10 +63,31 @@ export default function EventsPage() {
   const handleJoinEvent = async (eventId: number) => {
     try {
       const result = await joinEvent(eventId);
-      alert(`Successfully joined event! You earned ${result.stars_earned || 0} stars!`);
+      const starsEarned = result.stars_earned || 0;
+      success(`Successfully joined event! You earned ${starsEarned} ${starsEarned === 1 ? 'star' : 'stars'}!`);
     } catch (error: any) {
       console.error('Failed to join event:', error);
-      alert(error.response?.data?.detail || 'Failed to join event');
+      showError(error.response?.data?.detail || 'Failed to join event');
+    }
+  };
+
+  const handleLeaveEvent = async (eventId: number) => {
+    try {
+      await leaveEvent(eventId);
+      success('Successfully left event');
+    } catch (error: any) {
+      console.error('Failed to leave event:', error);
+      showError(error.response?.data?.detail || 'Failed to leave event');
+    }
+  };
+
+  const handleDeleteEvent = async (eventId: number) => {
+    try {
+      await deleteEvent(eventId);
+      success('Event deleted successfully');
+    } catch (error: any) {
+      console.error('Failed to delete event:', error);
+      showError(error.response?.data?.detail || 'Failed to delete event');
     }
   };
 
@@ -155,8 +179,8 @@ export default function EventsPage() {
               event={event}
               currentUserId={user?.id}
               onJoin={handleJoinEvent}
-              onLeave={leaveEvent}
-              onDelete={deleteEvent}
+              onLeave={handleLeaveEvent}
+              onDelete={handleDeleteEvent}
               showActions={true}
             />
           ))}

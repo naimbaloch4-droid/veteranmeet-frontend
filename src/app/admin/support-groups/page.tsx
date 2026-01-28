@@ -13,6 +13,7 @@ import {
   Unlock,
   X
 } from 'lucide-react';
+import { useToastStore } from '@/store/useToastStore';
 
 interface SupportGroup {
   id: number;
@@ -49,6 +50,7 @@ interface ChatMessage {
 }
 
 export default function SupportGroupsManagement() {
+  const { error: showError } = useToastStore();
   const [groups, setGroups] = useState<SupportGroup[]>([]);
   const [selectedGroup, setSelectedGroup] = useState<SupportGroup | null>(null);
   const [members, setMembers] = useState<GroupMember[]>([]);
@@ -82,7 +84,7 @@ export default function SupportGroupsManagement() {
       setShowMembersModal(true);
     } catch (err: any) {
       console.error('Failed to fetch members:', err);
-      alert('Failed to load group members');
+      showError('Failed to load group members');
     }
   };
 
@@ -93,7 +95,7 @@ export default function SupportGroupsManagement() {
       setShowChatModal(true);
     } catch (err: any) {
       console.error('Failed to fetch chat messages:', err);
-      alert('Failed to load chat messages');
+      showError('Failed to load chat messages');
     }
   };
 
@@ -179,11 +181,11 @@ export default function SupportGroupsManagement() {
             <div className="space-y-2 text-sm mb-5 pb-5 border-b border-gray-100">
               <div className="flex items-center justify-between">
                 <span className="text-gray-500">Members:</span>
-                <span className="font-semibold text-gray-900">{group.members_count}</span>
+                <span className="font-semibold text-gray-900">{group.members_count || 0}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-gray-500">Creator:</span>
-                <span className="font-semibold text-gray-900">@{group.creator.username}</span>
+                <span className="font-semibold text-gray-900">@{group.creator?.username || 'Unknown'}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-gray-500">Created:</span>

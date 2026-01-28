@@ -7,9 +7,11 @@ import { usePostStore } from '@/store/usePostStore';
 import PostCard from '@/components/PostCard';
 import api from '@/lib/api';
 import { getUser } from '@/lib/auth';
+import { useToastStore } from '@/store/useToastStore';
 
 export default function CommunityFeedPage() {
   const { feedPosts, loading, fetchFeedPosts, createPost, likePost, commentOnPost } = usePostStore();
+  const { success, error: showError } = useToastStore();
   const [user, setUser] = useState<any>(null);
   const [showCreatePost, setShowCreatePost] = useState(false);
   const [postForm, setPostForm] = useState({ title: '', content: '', image: null as File | null });
@@ -71,10 +73,10 @@ export default function CommunityFeedPage() {
   const handleGiveStar = async (userId: number) => {
     try {
       await api.post(`/api/auth/give-star/${userId}/`);
-      alert('Star given successfully!');
+      success('Star given successfully!');
     } catch (error: any) {
       console.error('Failed to give star:', error);
-      alert(error.response?.data?.detail || 'Failed to give star');
+      showError(error.response?.data?.detail || 'Failed to give star');
     }
   };
 

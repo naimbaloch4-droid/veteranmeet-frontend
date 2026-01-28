@@ -8,6 +8,7 @@ import UserCard from '@/components/UserCard';
 import { getUser } from '@/lib/auth';
 import api from '@/lib/api';
 import { useRouter } from 'next/navigation';
+import { useToastStore } from '@/store/useToastStore';
 
 export default function ConnectionsPage() {
   const router = useRouter();
@@ -25,6 +26,7 @@ export default function ConnectionsPage() {
   } = useConnectionStore();
   
   const { createDirectChat } = useChatStore();
+  const { success, error: showError } = useToastStore();
   
   const [user, setUser] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<'followers' | 'following' | 'suggestions'>('suggestions');
@@ -41,40 +43,43 @@ export default function ConnectionsPage() {
   const handleFollow = async (userId: number) => {
     try {
       await followUser(userId);
-      // Refresh suggestions after following
+      success('Successfully followed user!');
+      // Refresh suggestions to get updated list
       fetchSuggestions();
     } catch (error: any) {
       console.error('Failed to follow user:', error);
-      alert(error.response?.data?.detail || 'Failed to follow user');
+      showError(error.response?.data?.detail || 'Failed to follow user');
     }
   };
 
   const handleUnfollow = async (userId: number) => {
     try {
       await unfollowUser(userId);
+      success('Successfully unfollowed user');
     } catch (error: any) {
       console.error('Failed to unfollow user:', error);
-      alert(error.response?.data?.detail || 'Failed to unfollow user');
+      showError(error.response?.data?.detail || 'Failed to unfollow user');
     }
   };
 
   const handleMessage = async (userId: number) => {
     try {
       const room = await createDirectChat(userId);
+      success('Chat started successfully!');
       router.push('/dashboard/messages');
     } catch (error: any) {
       console.error('Failed to create chat:', error);
-      alert(error.response?.data?.detail || 'Failed to start chat');
+      showError(error.response?.data?.detail || 'Failed to start chat');
     }
   };
 
   const handleGiveStar = async (userId: number) => {
     try {
       await api.post(`/api/auth/give-star/${userId}/`);
-      alert('Star given successfully!');
+      success('Star given successfully!');
     } catch (error: any) {
       console.error('Failed to give star:', error);
-      alert(error.response?.data?.detail || 'Failed to give star');
+      showError(error.response?.data?.detail || 'Failed to give star');
     }
   };
 

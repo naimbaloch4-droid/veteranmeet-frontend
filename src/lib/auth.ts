@@ -62,14 +62,30 @@ export const logout = async (): Promise<void> => {
   
   try {
     // Call logout API to clear httpOnly cookies
-    await fetch('/api/auth/logout', { method: 'POST' });
+    await fetch('/api/auth/logout', { 
+      method: 'POST',
+      headers: {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+      }
+    });
   } catch (error) {
     console.error('Logout API error:', error);
   }
   
-  // Clear localStorage
-  localStorage.removeItem('user');
+  // Clear ALL storage
+  localStorage.clear();
+  sessionStorage.clear();
   
-  // Redirect to login
-  window.location.href = '/login';
+  // Clear all cookies (client-side accessible ones)
+  document.cookie.split(";").forEach((c) => {
+    document.cookie = c
+      .replace(/^ +/, "")
+      .replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/");
+  });
+  
+  // Force redirect with cache busting to prevent back button issues
+  const timestamp = Date.now();
+  window.location.href = `/login?logout=${timestamp}`;
 };

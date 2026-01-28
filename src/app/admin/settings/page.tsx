@@ -2,8 +2,10 @@
 
 import { useState } from 'react';
 import { Settings, Save, Bell, Shield, Globe, Mail, Database, Key } from 'lucide-react';
+import { useToastStore } from '@/store/useToastStore';
 
 export default function AdminSettingsPage() {
+  const { success } = useToastStore();
   const [saving, setSaving] = useState(false);
   const [settings, setSettings] = useState({
     siteName: 'VeteranMeet',
@@ -21,7 +23,7 @@ export default function AdminSettingsPage() {
     // Simulate API call
     await new Promise(resolve => setTimeout(resolve, 1500));
     setSaving(false);
-    alert('Settings saved successfully!');
+    success('Settings saved successfully!');
   };
 
   return (

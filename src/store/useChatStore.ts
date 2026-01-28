@@ -2,6 +2,8 @@ import { create } from 'zustand';
 import api from '@/lib/api';
 import { User } from './usePostStore';
 
+export type MessageStatus = 'sending' | 'sent' | 'delivered' | 'seen' | 'failed';
+
 export interface Message {
   id: number;
   room: number;
@@ -9,6 +11,8 @@ export interface Message {
   content: string;
   created_at: string;
   is_read: boolean;
+  status?: MessageStatus; // Client-side status tracking
+  error?: string; // Error message for failed sends
 }
 
 export interface ChatRoom {
@@ -20,6 +24,8 @@ export interface ChatRoom {
   unread_count?: number;
   updated_at: string;
   created_at: string;
+  is_typing?: boolean; // Track if other user is typing
+  last_seen?: string; // Track last seen timestamp
 }
 
 interface ChatStore {
@@ -28,6 +34,8 @@ interface ChatStore {
   messages: Message[];
   loading: boolean;
   error: string | null;
+  typingUsers: Map<number, string>; // roomId -> username
+  onlineUsers: Set<number>; // userId set
 
   // Actions
   fetchRooms: () => Promise<void>;
@@ -39,6 +47,12 @@ interface ChatStore {
   setCurrentRoom: (room: ChatRoom | null) => void;
   addMessage: (message: Message) => void;
   clearChat: () => void;
+  retryMessage: (tempId: number, roomId: number, content: string) => Promise<void>;
+  setTyping: (roomId: number, username: string) => void;
+  clearTyping: (roomId: number) => void;
+  setUserOnline: (userId: number, isOnline: boolean) => void;
+  updateMessageStatus: (messageId: number, status: MessageStatus) => void;
+  fetchOnlineUsers: () => Promise<void>;
 }
 
 export const useChatStore = create<ChatStore>((set, get) => ({
@@ -47,6 +61,8 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   messages: [],
   loading: false,
   error: null,
+  typingUsers: new Map(),
+  onlineUsers: new Set(),
 
   fetchRooms: async () => {
     set({ loading: true, error: null });
@@ -67,7 +83,14 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         params: { room_id: roomId }
       });
       const messages = response.data.results || response.data || [];
-      set({ messages, loading: false });
+      
+      // Add status to existing messages
+      const messagesWithStatus = messages.map((msg: Message) => ({
+        ...msg,
+        status: msg.is_read ? 'seen' : 'delivered' as MessageStatus
+      }));
+      
+      set({ messages: messagesWithStatus, loading: false });
     } catch (error: any) {
       console.error('Failed to fetch messages:', error);
       set({ error: error.response?.data?.detail || 'Failed to load messages', loading: false });
@@ -102,7 +125,8 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       sender: currentUser,
       content: content,
       created_at: new Date().toISOString(),
-      is_read: false
+      is_read: false,
+      status: 'sending'
     };
 
     // Add to UI immediately
@@ -125,13 +149,22 @@ export const useChatStore = create<ChatStore>((set, get) => ({
 
       // Replace optimistic message with actual data from server
       set((state) => ({
-        messages: state.messages.map(msg => msg.id === tempId ? actualMessage : msg),
+        messages: state.messages.map(msg => 
+          msg.id === tempId 
+            ? { ...actualMessage, status: 'sent' as MessageStatus } 
+            : msg
+        ),
         rooms: state.rooms.map(room =>
           room.id === roomId
             ? { ...room, last_message: actualMessage, updated_at: actualMessage.created_at }
             : room
         )
       }));
+
+      // Update to delivered after a short delay (simulating server confirmation)
+      setTimeout(() => {
+        get().updateMessageStatus(actualMessage.id, 'delivered');
+      }, 500);
 
       return actualMessage;
     } catch (error: any) {
@@ -140,10 +173,60 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       // Update the optimistic message to reflect failure
       set((state) => ({
         messages: state.messages.map(msg =>
-          msg.id === tempId ? { ...msg, content: msg.content + ' ⚠️ (Failed to send)' } : msg
+          msg.id === tempId 
+            ? { ...msg, status: 'failed' as MessageStatus, error: 'Failed to send' } 
+            : msg
         )
       }));
 
+      throw error;
+    }
+  },
+
+  retryMessage: async (tempId: number, roomId: number, content: string) => {
+    // Update status to sending
+    set((state) => ({
+      messages: state.messages.map(msg =>
+        msg.id === tempId
+          ? { ...msg, status: 'sending' as MessageStatus, error: undefined }
+          : msg
+      )
+    }));
+
+    try {
+      const response = await api.post('/api/chat/messages/', {
+        room: roomId,
+        content
+      });
+
+      const actualMessage = response.data;
+
+      // Replace failed message with actual data
+      set((state) => ({
+        messages: state.messages.map(msg =>
+          msg.id === tempId
+            ? { ...actualMessage, status: 'sent' as MessageStatus }
+            : msg
+        ),
+        rooms: state.rooms.map(room =>
+          room.id === roomId
+            ? { ...room, last_message: actualMessage, updated_at: actualMessage.created_at }
+            : room
+        )
+      }));
+
+      setTimeout(() => {
+        get().updateMessageStatus(actualMessage.id, 'delivered');
+      }, 500);
+    } catch (error: any) {
+      console.error('[Chat] Retry failed:', error);
+      set((state) => ({
+        messages: state.messages.map(msg =>
+          msg.id === tempId
+            ? { ...msg, status: 'failed' as MessageStatus, error: 'Failed to send' }
+            : msg
+        )
+      }));
       throw error;
     }
   },
@@ -166,38 +249,85 @@ export const useChatStore = create<ChatStore>((set, get) => ({
 
   markMessageAsRead: async (messageId: number) => {
     try {
-      // Use the exact endpoint provided in the manual: POST /api/chat/messages/{id}/mark_read/
       await api.post(`/api/chat/messages/${messageId}/mark_read/`);
 
       set((state) => ({
         messages: state.messages.map(msg =>
-          msg.id === messageId ? { ...msg, is_read: true } : msg
+          msg.id === messageId ? { ...msg, is_read: true, status: 'seen' as MessageStatus } : msg
         )
       }));
     } catch (error: any) {
-      // Log more details to help debug the 404
       console.warn(`[Chat] Failed to mark message ${messageId} as read:`, error.response?.status === 404 ? 'Endpoint not found' : error.message);
     }
+  },
+
+  updateMessageStatus: (messageId: number, status: MessageStatus) => {
+    set((state) => ({
+      messages: state.messages.map(msg =>
+        msg.id === messageId ? { ...msg, status } : msg
+      )
+    }));
   },
 
   setCurrentRoom: (room: ChatRoom | null) => {
     set({ currentRoom: room, messages: [] });
     if (room) {
       get().fetchMessages(room.id);
-      // Removed markAsRead(room.id) as the manual specified per-message marking
     }
   },
 
   addMessage: (message: Message) => {
     set((state) => ({
-      messages: [...state.messages, message],
+      messages: [...state.messages, { ...message, status: 'delivered' as MessageStatus }],
       rooms: state.rooms.map(room =>
         room.id === message.room
-          ? { ...room, last_message: message, updated_at: message.created_at }
+          ? { ...room, last_message: message, updated_at: message.created_at, unread_count: (room.unread_count || 0) + 1 }
           : room
       )
     }));
   },
 
-  clearChat: () => set({ rooms: [], currentRoom: null, messages: [] })
+  setTyping: (roomId: number, username: string) => {
+    set((state) => {
+      const newTypingUsers = new Map(state.typingUsers);
+      newTypingUsers.set(roomId, username);
+      return { typingUsers: newTypingUsers };
+    });
+  },
+
+  clearTyping: (roomId: number) => {
+    set((state) => {
+      const newTypingUsers = new Map(state.typingUsers);
+      newTypingUsers.delete(roomId);
+      return { typingUsers: newTypingUsers };
+    });
+  },
+
+  setUserOnline: (userId: number, isOnline: boolean) => {
+    set((state) => {
+      const newOnlineUsers = new Set(state.onlineUsers);
+      if (isOnline) {
+        newOnlineUsers.add(userId);
+      } else {
+        newOnlineUsers.delete(userId);
+      }
+      return { onlineUsers: newOnlineUsers };
+    });
+  },
+
+  fetchOnlineUsers: async () => {
+    try {
+      const response = await api.get('/api/chat/online-users/');
+      const onlineUserIds = response.data.online_users || response.data || [];
+      
+      // Update the online users set
+      const newOnlineUsers = new Set<number>(onlineUserIds);
+      set({ onlineUsers: newOnlineUsers });
+    } catch (error: any) {
+      // Silently fail - online status is not critical
+      console.warn('Failed to fetch online users:', error.response?.status === 404 ? 'Endpoint not found' : error.message);
+    }
+  },
+
+  clearChat: () => set({ rooms: [], currentRoom: null, messages: [], typingUsers: new Map(), onlineUsers: new Set() })
 }));

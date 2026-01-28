@@ -27,6 +27,7 @@ import {
 import api from '@/lib/api';
 import StatCard from '@/components/StatCard';
 import { useConnectionStore } from '@/store/useConnectionStore';
+import { useToastStore } from '@/store/useToastStore';
 import {
   formatDateTime,
   formatTimeAgo,
@@ -145,6 +146,9 @@ export default function VeteranDashboard() {
 
       // Fetch main dashboard data (multi-fetch endpoint)
       const dashboardRes = await api.get('/api/hub/dashboard/');
+      console.log('[Veteran Dashboard] Dashboard data received:', dashboardRes.data);
+      console.log('[Veteran Dashboard] Upcoming events count:', dashboardRes.data?.upcoming_events?.length || 0);
+      console.log('[Veteran Dashboard] Upcoming events:', dashboardRes.data?.upcoming_events);
       setDashboardData(dashboardRes.data);
 
       // Fetch user's detailed stats
@@ -175,10 +179,14 @@ export default function VeteranDashboard() {
           api.get('/api/events/', { params: { limit: 5 } })
         ]);
 
+        const upcomingEvents = eventsRes.status === 'fulfilled' ? (eventsRes.value.data.results || eventsRes.value.data || []) : [];
+        console.log('[Veteran Dashboard] Fallback - Fetched events directly:', upcomingEvents.length, 'events');
+        console.log('[Veteran Dashboard] Fallback - Events data:', upcomingEvents);
+        
         const fallbackData: DashboardData = {
           user_stats: { posts_count: 0, events_joined: 0, stars: 0 },
           recent_posts: postsRes.status === 'fulfilled' ? (postsRes.value.data.results || postsRes.value.data || []) : [],
-          upcoming_events: eventsRes.status === 'fulfilled' ? (eventsRes.value.data.results || eventsRes.value.data || []) : [],
+          upcoming_events: upcomingEvents,
           announcements: []
         };
         
@@ -251,22 +259,23 @@ export default function VeteranDashboard() {
   const handleJoinEvent = async (eventId: number) => {
     try {
       const response = await api.post(`/api/events/${eventId}/join/`);
-      alert(`Successfully joined event! You earned ${response.data.stars_earned || 0} stars!`);
+      const starsEarned = response.data?.stars_earned ?? response.data?.star_points ?? 0;
+      useToastStore.getState().success(`Successfully joined event! You earned ${starsEarned} ${starsEarned === 1 ? 'star' : 'stars'}!`);
       fetchDashboardData();
     } catch (err: any) {
       console.error('Failed to join event:', err);
-      alert(err.response?.data?.detail || 'Failed to join event');
+      useToastStore.getState().error(err.response?.data?.detail || 'Failed to join event');
     }
   };
 
   const handleGiveStar = async (userId: number) => {
     try {
       await api.post(`/api/auth/give-star/${userId}/`);
-      alert('Star given successfully! +1 reputation');
+      useToastStore.getState().success('Star given successfully! +1 reputation');
       fetchDashboardData();
     } catch (err: any) {
       console.error('Failed to give star:', err);
-      alert(err.response?.data?.detail || 'Failed to give star');
+      useToastStore.getState().error(err.response?.data?.detail || 'Failed to give star');
     }
   };
 

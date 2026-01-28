@@ -8,6 +8,7 @@ import GroupCard from '@/components/GroupCard';
 import PostCard from '@/components/PostCard';
 import { getUser } from '@/lib/auth';
 import api from '@/lib/api';
+import { useToastStore } from '@/store/useToastStore';
 
 export default function GroupsPage() {
   const {
@@ -26,6 +27,7 @@ export default function GroupsPage() {
     createGroupPost
   } = useGroupStore();
 
+  const { success, error: showError } = useToastStore();
   const [user, setUser] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<'all' | 'my'>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -43,6 +45,7 @@ export default function GroupsPage() {
   useEffect(() => {
     const userData = getUser();
     setUser(userData);
+    console.log('[Groups Page] User data:', userData);
     fetchGroups();
     fetchMyGroups();
   }, [fetchGroups, fetchMyGroups]);
@@ -79,28 +82,35 @@ export default function GroupsPage() {
       await createGroupPost(currentGroup.id, formData);
       setPostForm({ content: '', image: null });
       setShowCreatePost(false);
+      success('Post created successfully!');
     } catch (error: any) {
       console.error('Failed to create post:', error);
-      alert(error.response?.data?.detail || 'Failed to create post');
+      showError(error.response?.data?.detail || 'Failed to create post');
     }
   };
 
   const handleGiveStar = async (userId: number) => {
     try {
       await api.post(`/api/auth/give-star/${userId}/`);
-      alert('Star given successfully!');
+      success('Star given successfully!');
     } catch (error: any) {
       console.error('Failed to give star:', error);
-      alert(error.response?.data?.detail || 'Failed to give star');
+      showError(error.response?.data?.detail || 'Failed to give star');
     }
   };
 
-  const getCurrentGroups = () => activeTab === 'my' ? myGroups : groups;
+  const getCurrentGroups = () => {
+    const currentGroups = activeTab === 'my' ? myGroups : groups;
+    console.log(`[Groups Page] Current tab: ${activeTab}, showing ${currentGroups.length} groups`);
+    return currentGroups;
+  };
   
   const filteredGroups = (getCurrentGroups() || []).filter(group =>
     group.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     group.description.toLowerCase().includes(searchQuery.toLowerCase())
   );
+  
+  console.log('[Groups Page] Filtered groups:', filteredGroups.length);
 
   const topics = ['General', 'PTSD Support', 'Career Transition', 'Health & Wellness', 'Benefits', 'Family', 'Education'];
 
@@ -187,7 +197,7 @@ export default function GroupsPage() {
         </div>
       ) : (
         /* Groups List View */
-        <>
+        <div>
           {/* Filters */}
           <div className="mb-6 space-y-4">
             <div className="flex items-center space-x-3">
@@ -244,9 +254,22 @@ export default function GroupsPage() {
             <div className="text-center py-12">
               <div className="w-16 h-16 border-4 border-green-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
               <p className="text-gray-600 font-medium">Loading groups...</p>
+              <p className="text-xs text-gray-500 mt-2">Fetching support groups from server...</p>
             </div>
-          ) : filteredGroups.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          ) : (
+            <>
+              {/* Debug info */}
+              {!loading && (
+                <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-xl">
+                  <p className="text-sm text-blue-800">
+                    <strong>Debug Info:</strong> Total groups: {groups.length}, My groups: {myGroups.length}, 
+                    Active tab: {activeTab}, Filtered: {filteredGroups.length}, Loading: {loading ? 'Yes' : 'No'}
+                  </p>
+                </div>
+              )}
+              
+              {filteredGroups.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {filteredGroups.map((group) => (
                 <GroupCard
                   key={group.id}
@@ -259,17 +282,34 @@ export default function GroupsPage() {
                   showActions={true}
                 />
               ))}
-            </div>
-          ) : (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-12 text-center">
-              <Shield className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-              <h2 className="text-xl font-semibold text-gray-900 mb-2">No groups found</h2>
-              <p className="text-gray-600">
-                {searchQuery ? 'Try adjusting your search' : 'Create the first support group'}
-              </p>
-            </div>
+                </div>
+              ) : (
+                <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-12 text-center">
+                  <Shield className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                  <h2 className="text-xl font-semibold text-gray-900 mb-2">
+                    {searchQuery ? 'No groups found' : activeTab === 'my' ? 'You haven\'t joined any groups yet' : 'No support groups available'}
+                  </h2>
+                  <p className="text-gray-600 mb-4">
+                    {searchQuery 
+                      ? 'Try adjusting your search'
+                      : activeTab === 'my'
+                      ? 'Join a group to start connecting with others'
+                      : 'Be the first to create a support group'
+                    }
+                  </p>
+                  {!searchQuery && activeTab === 'all' && user?.is_veteran && (
+                    <button
+                      onClick={() => setShowCreateGroup(true)}
+                      className="mt-4 px-6 py-3 bg-green-600 text-white rounded-xl hover:bg-green-700 transition-colors font-medium"
+                    >
+                      Create First Group
+                    </button>
+                  )}
+                </div>
+              )}
+            </>
           )}
-        </>
+        </div>
       )}
 
       {/* Create Group Modal */}
