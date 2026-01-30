@@ -146,9 +146,6 @@ export default function VeteranDashboard() {
 
       // Fetch main dashboard data (multi-fetch endpoint)
       const dashboardRes = await api.get('/api/hub/dashboard/');
-      console.log('[Veteran Dashboard] Dashboard data received:', dashboardRes.data);
-      console.log('[Veteran Dashboard] Upcoming events count:', dashboardRes.data?.upcoming_events?.length || 0);
-      console.log('[Veteran Dashboard] Upcoming events:', dashboardRes.data?.upcoming_events);
       setDashboardData(dashboardRes.data);
 
       // Fetch user's detailed stats
