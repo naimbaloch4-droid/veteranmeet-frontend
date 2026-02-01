@@ -14,10 +14,12 @@ import {
   Paperclip,
   Smile,
   ShieldCheck,
-  RotateCcw
+  RotateCcw,
+  Trash2
 } from 'lucide-react';
 import { useChatStore, Message, ChatRoom } from '@/store/useChatStore';
 import { useConnectionStore } from '@/store/useConnectionStore';
+import { useConfirmStore } from '@/store/useConfirmStore';
 import { getUser } from '@/lib/auth';
 import { formatTimeAgo, getInitials } from '@/utils/veteranFormatters';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -41,10 +43,12 @@ export default function MessagesPage() {
     retryMessage,
     onlineUsers,
     typingUsers,
-    fetchOnlineUsers
+    fetchOnlineUsers,
+    deleteRoom
   } = useChatStore();
 
   const { following, fetchFollowing } = useConnectionStore();
+  const { confirm } = useConfirmStore();
 
   const [user, setUser] = useState<any>(null);
   const [messageText, setMessageText] = useState('');
@@ -92,6 +96,21 @@ export default function MessagesPage() {
       clearInterval(pollInterval);
     };
   }, []); // Empty dependency array - run once on mount, Zustand functions are stable
+
+  // ESC key handler to exit current chat
+  useEffect(() => {
+    const handleEscKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && currentRoom) {
+        setCurrentRoom(null);
+        setMessageText('');
+      }
+    };
+
+    window.addEventListener('keydown', handleEscKey);
+    return () => {
+      window.removeEventListener('keydown', handleEscKey);
+    };
+  }, [currentRoom, setCurrentRoom]);
 
   // Detect new messages in OTHER rooms and show notification
   useEffect(() => {
@@ -254,6 +273,31 @@ export default function MessagesPage() {
     }
   };
 
+  const handleDeleteChat = async () => {
+    if (!currentRoom) return;
+
+    const other = getOtherParticipant(currentRoom);
+    const displayName = other 
+      ? `${other.first_name} ${other.last_name}`.trim() || other.username
+      : 'this conversation';
+
+    confirm({
+      title: 'Delete Conversation',
+      message: `Are you sure you want to delete your conversation with ${displayName}? This action cannot be undone.`,
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
+      type: 'danger',
+      onConfirm: async () => {
+        try {
+          await deleteRoom(currentRoom.id);
+          setCurrentRoom(null);
+        } catch (error: any) {
+          console.error('Failed to delete chat:', error);
+        }
+      }
+    });
+  };
+
   const getOtherParticipant = (room: ChatRoom) => {
     if (!room.participants || room.participants.length === 0) return null;
 
@@ -350,21 +394,34 @@ export default function MessagesPage() {
                   const other = getOtherParticipant(room);
                   const isActive = currentRoom?.id === room.id;
                   const isOnline = other ? isUserOnline(other.id) : false;
+                  const hasUnread = room.unread_count && room.unread_count > 0;
+
+                  // DEBUGGING: Log unread count
+                  console.log('Unread:', room.unread_count, 'Room:', room.id, 'Active:', isActive);
+
                   if (!other) return null;
 
                   return (
                     <button
                       key={`room-${room.id}-${index}`}
                       onClick={() => setCurrentRoom(room)}
-                      className={`w-full p-4 rounded-2xl text-left transition-all relative ${isActive
-                        ? 'bg-blue-50/80 shadow-sm border border-blue-100/50'
-                        : 'hover:bg-slate-50 border border-transparent'
-                        }`}
+                      className={`w-full p-4 rounded-2xl text-left transition-all relative ${
+                        isActive
+                          ? 'bg-blue-50/80 shadow-sm border border-blue-100/50'
+                          : hasUnread
+                          ? 'bg-blue-50/30 hover:bg-blue-50/50 border border-blue-100/30'
+                          : 'hover:bg-slate-50 border border-transparent'
+                      }`}
                     >
                       <div className="flex items-center space-x-4">
                         <div className="relative">
-                          <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-lg font-bold shadow-sm ${isActive ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-100'
-                            }`}>
+                          <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-lg font-bold shadow-sm ${
+                            isActive 
+                              ? 'bg-blue-600 text-white' 
+                              : hasUnread
+                              ? 'bg-blue-700 text-white ring-2 ring-blue-200'
+                              : 'bg-slate-800 text-slate-100'
+                          }`}>
                             {getInitials(other?.first_name || '', other?.last_name || '', other?.username || '')}
                           </div>
                           <div className="absolute -bottom-1 -right-1">
@@ -374,25 +431,44 @@ export default function MessagesPage() {
 
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center justify-between mb-0.5">
-                            <h3 className={`text-sm font-bold truncate ${isActive ? 'text-blue-900' : 'text-slate-900'}`}>
+                            <h3 className={`text-sm truncate ${
+                              isActive 
+                                ? 'font-bold text-blue-900' 
+                                : hasUnread
+                                ? 'font-extrabold text-slate-900'
+                                : 'font-bold text-slate-900'
+                            }`}>
                               {other?.first_name || ''} {other?.last_name || ''}
                             </h3>
                             {room.last_message && (
-                              <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
+                              <span className={`text-[10px] uppercase tracking-wider ${
+                                hasUnread 
+                                  ? 'font-extrabold text-blue-600'
+                                  : 'font-bold text-slate-400'
+                              }`}>
                                 {formatTimeAgo(room.last_message.created_at)}
                               </span>
                             )}
                           </div>
 
                           <div className="flex items-center justify-between">
-                            <p className={`text-xs truncate max-w-[180px] ${isActive ? 'text-blue-600/80' : 'text-slate-500'
-                              }`}>
+                            <p className={`text-xs truncate max-w-[180px] ${
+                              isActive 
+                                ? 'text-blue-600/80 font-medium' 
+                                : hasUnread
+                                ? 'text-slate-900 font-bold'
+                                : 'text-slate-500 font-normal'
+                            }`}>
                               {room.last_message ? room.last_message.content : 'No messages yet'}
                             </p>
-                            {room.unread_count && room.unread_count > 0 && !isActive && (
-                              <span className="flex items-center justify-center min-w-[18px] h-[18px] px-1 bg-blue-600 text-[10px] font-black text-white rounded-full">
-                                {room.unread_count}
-                              </span>
+                            {hasUnread && !isActive && (
+                              <motion.span
+                                initial={{ scale: 0 }}
+                                animate={{ scale: 1 }}
+                                className="flex items-center justify-center min-w-[20px] h-[20px] px-1.5 bg-gradient-to-br from-blue-600 to-blue-700 text-[10px] font-black text-white rounded-full shadow-lg shadow-blue-500/30 ring-2 ring-blue-200"
+                              >
+                                {(room.unread_count || 0) > 99 ? '99+' : room.unread_count}
+                              </motion.span>
                             )}
                           </div>
                         </div>
@@ -430,6 +506,7 @@ export default function MessagesPage() {
                   {(() => {
                     const other = getOtherParticipant(currentRoom);
                     const isOnline = other ? isUserOnline(other.id) : false;
+                    const unreadCount = currentRoom.unread_count || 0;
 
                     let displayName = 'Veteran Member';
                     if (other) {
@@ -453,9 +530,20 @@ export default function MessagesPage() {
                           </div>
                         </div>
                         <div>
-                          <h3 className="text-base font-bold text-slate-900 leading-tight">
-                            {displayName}
-                          </h3>
+                          <div className="flex items-center space-x-2">
+                            <h3 className="text-base font-bold text-slate-900 leading-tight">
+                              {displayName}
+                            </h3>
+                            {unreadCount > 0 && (
+                              <motion.span
+                                initial={{ opacity: 0, scale: 0.8 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs font-bold rounded-full"
+                              >
+                                {unreadCount} unread
+                              </motion.span>
+                            )}
+                          </div>
                           <div className="flex items-center mt-0.5">
                             <OnlineStatusIndicator isOnline={isOnline} size="sm" showLabel />
                           </div>
@@ -471,6 +559,13 @@ export default function MessagesPage() {
                   </button>
                   <button className="p-2.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all">
                     <Video className="w-5 h-5" />
+                  </button>
+                  <button 
+                    onClick={handleDeleteChat}
+                    className="p-2.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"
+                    title="Delete conversation"
+                  >
+                    <Trash2 className="w-5 h-5" />
                   </button>
                   <button className="p-2.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all">
                     <MoreVertical className="w-5 h-5" />

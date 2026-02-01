@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import api from '@/lib/api';
+import { chatService } from '@/services/api.service';
 import { User } from './usePostStore';
 
 export type MessageStatus = 'sending' | 'sent' | 'delivered' | 'seen' | 'failed';
@@ -53,6 +53,7 @@ interface ChatStore {
   setUserOnline: (userId: number, isOnline: boolean) => void;
   updateMessageStatus: (messageId: number, status: MessageStatus) => void;
   fetchOnlineUsers: () => Promise<void>;
+  deleteRoom: (roomId: number) => Promise<void>;
 }
 
 export const useChatStore = create<ChatStore>((set, get) => ({
@@ -67,8 +68,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   fetchRooms: async () => {
     set({ loading: true, error: null });
     try {
-      const response = await api.get('/api/chat/rooms/');
-      const rooms = response.data.results || response.data || [];
+      const rooms = await chatService.getRooms();
 
       // Validate and sanitize room data
       const validRooms = rooms.filter((room: any) => {
@@ -79,8 +79,16 @@ export const useChatStore = create<ChatStore>((set, get) => ({
                room.participants.length > 0;
       });
 
-      // Sort rooms by updated_at (most recent first) so latest conversations appear at top
+      // Sort rooms: unread messages first, then by updated_at (most recent first)
       const sortedRooms = validRooms.sort((a: ChatRoom, b: ChatRoom) => {
+        const aHasUnread = (a.unread_count || 0) > 0;
+        const bHasUnread = (b.unread_count || 0) > 0;
+
+        // If one has unread and the other doesn't, prioritize unread
+        if (aHasUnread && !bHasUnread) return -1;
+        if (!aHasUnread && bHasUnread) return 1;
+
+        // If both have unread or both don't, sort by updated_at
         const aTime = new Date(a.updated_at || a.created_at || 0).getTime();
         const bTime = new Date(b.updated_at || b.created_at || 0).getTime();
         return bTime - aTime;
@@ -97,10 +105,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   fetchMessages: async (roomId: number) => {
     set({ loading: true, error: null });
     try {
-      const response = await api.get('/api/chat/messages/', {
-        params: { room_id: roomId }
-      });
-      const messages = response.data.results || response.data || [];
+      const messages = await chatService.getMessages(roomId);
       
       // Sort messages by created_at (oldest first) to ensure correct display order
       const sortedMessages = messages.sort((a: Message, b: Message) => 
@@ -122,11 +127,8 @@ export const useChatStore = create<ChatStore>((set, get) => ({
 
   createDirectChat: async (userId: number) => {
     try {
-      const response = await api.post('/api/chat/rooms/create_direct_chat/', {
-        user_id: userId
-      });
+      const newRoom = await chatService.createDirectChat(userId);
 
-      const newRoom = response.data;
       set((state) => ({
         rooms: [newRoom, ...state.rooms.filter(r => r.id !== newRoom.id)]
       }));
@@ -163,12 +165,10 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     }));
 
     try {
-      const response = await api.post('/api/chat/messages/', {
+      const actualMessage = await chatService.sendMessage({
         room: roomId,
         content
       });
-
-      const actualMessage = response.data;
 
       // Replace optimistic message with actual data from server
       set((state) => ({
@@ -217,12 +217,10 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     }));
 
     try {
-      const response = await api.post('/api/chat/messages/', {
+      const actualMessage = await chatService.sendMessage({
         room: roomId,
         content
       });
-
-      const actualMessage = response.data;
 
       // Replace failed message with actual data
       set((state) => ({
@@ -255,30 +253,35 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   },
 
   markAsRead: async (roomId: number) => {
-    try {
-      await api.post(`/api/chat/rooms/${roomId}/mark_read/`);
+    // Immediately update local state for instant UI feedback
+    set((state) => ({
+      rooms: state.rooms.map(room =>
+        room.id === roomId
+          ? { ...room, unread_count: 0 }
+          : room
+      )
+    }));
 
-      set((state) => ({
-        rooms: state.rooms.map(room =>
-          room.id === roomId
-            ? { ...room, unread_count: 0 }
-            : room
-        )
-      }));
+    // Then sync with backend
+    try {
+      await chatService.markRoomAsRead(roomId);
     } catch (error: any) {
-      console.error('Failed to mark as read:', error);
+      console.error('Failed to mark room as read:', error);
+      // Optionally revert the optimistic update if backend fails
     }
   },
 
   markMessageAsRead: async (messageId: number) => {
-    try {
-      await api.post(`/api/chat/messages/${messageId}/mark_read/`);
+    // Optimistically update message status
+    set((state) => ({
+      messages: state.messages.map(msg =>
+        msg.id === messageId ? { ...msg, is_read: true, status: 'seen' as MessageStatus } : msg
+      )
+    }));
 
-      set((state) => ({
-        messages: state.messages.map(msg =>
-          msg.id === messageId ? { ...msg, is_read: true, status: 'seen' as MessageStatus } : msg
-        )
-      }));
+    // Then sync with backend
+    try {
+      await chatService.markMessageAsRead(messageId);
     } catch (error: any) {
       console.warn(`[Chat] Failed to mark message ${messageId} as read:`, error.response?.status === 404 ? 'Endpoint not found' : error.message);
     }
@@ -293,21 +296,66 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   },
 
   setCurrentRoom: (room: ChatRoom | null) => {
+    const state = get();
+    
+    // Clear messages and set new room
     set({ currentRoom: room, messages: [] });
+    
     if (room) {
+      // Immediately mark as read in local state for instant UI update
+      if (room.unread_count && room.unread_count > 0) {
+        set((state) => ({
+          rooms: state.rooms.map(r =>
+            r.id === room.id ? { ...r, unread_count: 0 } : r
+          )
+        }));
+        
+        // Mark as read on backend
+        state.markAsRead(room.id);
+      }
+      
+      // Fetch messages
       get().fetchMessages(room.id);
     }
   },
 
   addMessage: (message: Message) => {
-    set((state) => ({
-      messages: [...state.messages, { ...message, status: 'delivered' as MessageStatus }],
-      rooms: state.rooms.map(room =>
+    set((state) => {
+      const currentRoom = state.currentRoom;
+      const isCurrentRoom = currentRoom?.id === message.room;
+
+      // Update rooms with new message
+      let updatedRooms = state.rooms.map(room =>
         room.id === message.room
-          ? { ...room, last_message: message, updated_at: message.created_at, unread_count: (room.unread_count || 0) + 1 }
+          ? {
+              ...room,
+              last_message: message,
+              updated_at: message.created_at,
+              unread_count: isCurrentRoom ? 0 : (room.unread_count || 0) + 1
+            }
           : room
-      )
-    }));
+      );
+
+      // Re-sort rooms: unread messages first, then by updated_at
+      updatedRooms = updatedRooms.sort((a: ChatRoom, b: ChatRoom) => {
+        const aHasUnread = (a.unread_count || 0) > 0;
+        const bHasUnread = (b.unread_count || 0) > 0;
+
+        // If one has unread and the other doesn't, prioritize unread
+        if (aHasUnread && !bHasUnread) return -1;
+        if (!aHasUnread && bHasUnread) return 1;
+
+        // If both have unread or both don't, sort by updated_at
+        const aTime = new Date(a.updated_at || a.created_at || 0).getTime();
+        const bTime = new Date(b.updated_at || b.created_at || 0).getTime();
+        return bTime - aTime;
+      });
+
+      return {
+        messages: isCurrentRoom ? [...state.messages, { ...message, status: 'delivered' as MessageStatus }] : state.messages,
+        rooms: updatedRooms
+      };
+    });
   },
 
   setTyping: (roomId: number, username: string) => {
@@ -340,15 +388,31 @@ export const useChatStore = create<ChatStore>((set, get) => ({
 
   fetchOnlineUsers: async () => {
     try {
-      const response = await api.get('/api/chat/online-users/');
-      const onlineUserIds = response.data.online_users || response.data || [];
+      const onlineUserIds = await chatService.getOnlineUsers();
       
-      // Update the online users set
+      // Completely replace the online users set (don't merge with old data)
+      // This ensures logged-out users are properly marked offline
       const newOnlineUsers = new Set<number>(onlineUserIds);
       set({ onlineUsers: newOnlineUsers });
     } catch (error: any) {
       // Silently fail - online status is not critical
       console.warn('Failed to fetch online users:', error.response?.status === 404 ? 'Endpoint not found' : error.message);
+    }
+  },
+
+  deleteRoom: async (roomId: number) => {
+    try {
+      await chatService.deleteRoom(roomId);
+      
+      // Remove room from state
+      set((state) => ({
+        rooms: state.rooms.filter(room => room.id !== roomId),
+        currentRoom: state.currentRoom?.id === roomId ? null : state.currentRoom,
+        messages: state.currentRoom?.id === roomId ? [] : state.messages
+      }));
+    } catch (error: any) {
+      console.error('Failed to delete room:', error);
+      throw error;
     }
   },
 

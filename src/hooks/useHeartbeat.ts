@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { isAuthenticated } from '@/lib/auth';
+import { chatService } from '@/services/api.service';
 
 /**
  * useHeartbeat Hook
@@ -30,18 +31,8 @@ export function useHeartbeat(intervalMs: number = 120000) {
     }
 
     try {
-      const response = await fetch('/api/chat/heartbeat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        console.warn('[Heartbeat] Failed to send heartbeat:', response.status);
-      } else {
-        lastHeartbeatRef.current = Date.now();
-      }
+      await chatService.sendHeartbeat();
+      lastHeartbeatRef.current = Date.now();
     } catch (error) {
       // Silently fail - heartbeat is not critical to app functionality
       console.warn('[Heartbeat] Error sending heartbeat:', error);
@@ -53,7 +44,7 @@ export function useHeartbeat(intervalMs: number = 120000) {
       return;
     }
 
-    // Send initial heartbeat immediately
+    // Send initial heartbeat immediately to mark user online
     sendHeartbeat();
 
     // Set up periodic heartbeat
