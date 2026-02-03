@@ -83,21 +83,39 @@ export default function MessagesPage() {
     checkMobile();
     window.addEventListener('resize', checkMobile);
 
+    return () => {
+      window.removeEventListener('resize', checkMobile);
+    };
+  }, []); // Empty dependency array - run once on mount, Zustand functions are stable
+
+  // Fetch messages immediately when room changes
+  useEffect(() => {
+    if (currentRoom) {
+      fetchMessages(currentRoom.id);
+      // Hide any notification for this room when opening it
+      setNewMessageNotification((prev) => 
+        prev.roomId === currentRoom.id ? { ...prev, show: false } : prev
+      );
+    }
+  }, [currentRoom?.id, fetchMessages]);
+
+  // Separate polling effect that tracks currentRoom properly
+  useEffect(() => {
     // SMART POLLING: Check for new messages/rooms every 3 seconds for better sync
     const pollInterval = setInterval(() => {
       fetchRooms();
       fetchOnlineUsers(); // Poll online status
 
+      // Now currentRoom is properly tracked
       if (currentRoom) {
         fetchMessages(currentRoom.id);
       }
     }, 3000); // Reduced to 3 seconds for better real-time experience
 
     return () => {
-      window.removeEventListener('resize', checkMobile);
       clearInterval(pollInterval);
     };
-  }, []); // Empty dependency array - run once on mount, Zustand functions are stable
+  }, [currentRoom?.id, fetchRooms, fetchMessages, fetchOnlineUsers]); // Track currentRoom changes
 
   // ESC key handler to exit current chat
   useEffect(() => {
@@ -120,8 +138,15 @@ export default function MessagesPage() {
 
     // Check for new messages in rooms OTHER than the currently open one
     rooms.forEach(room => {
-      // Only show notification for rooms with unread messages that are NOT currently open
-      if (room.unread_count && room.unread_count > 0 && room.id !== currentRoom?.id) {
+      // CRITICAL: Only show notification if:
+      // 1. Room has unread messages (count > 0)
+      // 2. Room is NOT the currently active chat
+      // 3. Message is from someone else (not the current user)
+      // 4. We haven't shown this notification before
+      const isCurrentChat = currentRoom && currentRoom.id === room.id;
+      const hasUnread = room.unread_count && room.unread_count > 0;
+      
+      if (!isCurrentChat && hasUnread) {
         const other = getOtherParticipant(room);
         if (other && room.last_message && room.last_message.sender.id !== user.id) {
           const senderName = `${other.first_name} ${other.last_name}`.trim() || other.username;
@@ -151,7 +176,7 @@ export default function MessagesPage() {
         }
       }
     });
-  }, [rooms, user, currentRoom]);
+  }, [rooms, user, currentRoom?.id]); // Track currentRoom.id specifically
 
   // Scroll to bottom when room changes OR when messages load
   useEffect(() => {
@@ -274,6 +299,9 @@ export default function MessagesPage() {
 
     try {
       await sendMessage(currentRoom.id, textToSend);
+      // Immediately fetch latest messages and rooms to ensure sync
+      await fetchMessages(currentRoom.id);
+      await fetchRooms(); // Update room list to reflect new last message
     } catch (error: any) {
       console.error('Failed to send message:', error);
     }
@@ -374,48 +402,48 @@ export default function MessagesPage() {
         }}
       />
 
-      <div className="h-full w-full bg-white rounded-2xl shadow-xl shadow-blue-900/5 overflow-hidden flex border border-slate-200/60">
+      <div className="h-full w-full bg-white rounded-2xl shadow-2xl shadow-slate-900/10 overflow-hidden flex border border-slate-200">
 
         {/* Left Sidebar: Rooms List */}
-        <aside className={`${isMobileView && currentRoom ? 'hidden' : 'flex'} w-full lg:w-[380px] flex-col border-r border-slate-100 bg-white z-10`}>
+        <aside className={`${isMobileView && currentRoom ? 'hidden' : 'flex'} w-full lg:w-[380px] flex-col border-r border-slate-200 bg-gradient-to-b from-white to-slate-50/30 z-10`}>
           {/* Sidebar Header */}
-          <div className="p-6 border-b border-slate-50">
+          <div className="p-6 border-b border-slate-200/80 bg-white/80 backdrop-blur-sm">
             <div className="flex items-center justify-between mb-6">
               <div>
-                <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Messages</h1>
-                <p className="text-slate-500 text-sm mt-0.5">Connect with fellow veterans</p>
+                <h1 className="text-2xl font-black text-slate-900 tracking-tight">Messages</h1>
+                <p className="text-slate-500 text-sm mt-1 font-medium">Connect with fellow veterans</p>
               </div>
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 onClick={() => setShowNewChat(true)}
-                className="p-3 bg-blue-600 text-white rounded-2xl shadow-lg shadow-blue-200 hover:bg-blue-700 transition-colors"
+                className="p-3 bg-gradient-to-br from-blue-600 to-blue-700 text-white rounded-xl shadow-lg shadow-blue-500/30 hover:shadow-blue-500/40 transition-all"
               >
                 <Plus className="w-5 h-5" />
               </motion.button>
             </div>
 
             <div className="relative group">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors w-4.5 h-4.5" />
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-600 transition-colors w-4.5 h-4.5" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search conversations..."
-                className="w-full pl-11 pr-4 py-3 bg-slate-50 border-none rounded-2xl text-sm focus:ring-2 focus:ring-blue-500/20 transition-all placeholder:text-slate-400"
+                className="w-full pl-11 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500/50 transition-all placeholder:text-slate-400 font-medium"
               />
             </div>
           </div>
 
           {/* Rooms Scroll Area */}
-          <div className="flex-1 overflow-y-auto custom-scrollbar">
+          <div className="flex-1 overflow-y-auto custom-scrollbar bg-white/50">
             {loading && rooms.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full space-y-3 opacity-60">
                 <div className="w-8 h-8 border-3 border-blue-600 border-t-transparent rounded-full animate-spin" />
                 <p className="text-sm font-medium text-slate-400">Loading your chats...</p>
               </div>
             ) : filteredRooms.length > 0 ? (
-              <div className="py-2 px-3 space-y-1">
+              <div className="py-3 px-4 space-y-2">
                 {filteredRooms.map((room, index) => {
                   const other = getOtherParticipant(room);
                   const isActive = currentRoom?.id === room.id;
@@ -427,78 +455,83 @@ export default function MessagesPage() {
                   if (!other) return null;
 
                   return (
-                    <button
-                      key={`room-${room.id}-${index}`}
-                      onClick={() => setCurrentRoom(room)}
-                      className={`w-full p-4 rounded-2xl text-left transition-all relative ${
-                        isActive
-                          ? 'bg-blue-50/80 shadow-sm border border-blue-100/50'
-                          : hasUnread
-                          ? 'bg-blue-50/30 hover:bg-blue-50/50 border border-blue-100/30'
-                          : 'hover:bg-slate-50 border border-transparent'
-                      }`}
-                    >
-                      <div className="flex items-center space-x-4">
-                        <div className="relative">
-                          <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-lg font-bold shadow-sm ${
-                            isActive 
-                              ? 'bg-blue-600 text-white' 
-                              : hasUnread
-                              ? 'bg-blue-700 text-white ring-2 ring-blue-200'
-                              : 'bg-slate-800 text-slate-100'
-                          }`}>
-                            {getInitials(other?.first_name || '', other?.last_name || '', other?.username || '')}
-                          </div>
-                          <div className="absolute -bottom-1 -right-1">
-                            <OnlineStatusIndicator isOnline={isOnline} size="md" />
-                          </div>
-                        </div>
-
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between mb-0.5">
-                            <h3 className={`text-sm truncate ${
+                    <div key={`room-${room.id}-${index}`} className="relative">
+                      <button
+                        onClick={() => setCurrentRoom(room)}
+                        className={`w-full p-4 rounded-xl text-left transition-all relative group ${
+                          isActive
+                            ? 'bg-gradient-to-r from-blue-50 to-blue-50/70 shadow-md border-2 border-blue-200/60 ring-1 ring-blue-100'
+                            : hasUnread
+                            ? 'bg-blue-50/40 hover:bg-blue-50/60 border-2 border-blue-100/50 hover:border-blue-200/60 shadow-sm'
+                            : 'hover:bg-slate-50 border-2 border-transparent hover:border-slate-100 hover:shadow-sm'
+                        }`}
+                      >
+                        <div className="flex items-center space-x-4">
+                          <div className="relative">
+                            <div className={`w-13 h-13 rounded-xl flex items-center justify-center text-base font-bold shadow-md transition-all ${
                               isActive 
-                                ? 'font-bold text-blue-900' 
+                                ? 'bg-gradient-to-br from-blue-600 to-blue-700 text-white shadow-blue-500/30' 
                                 : hasUnread
-                                ? 'font-extrabold text-slate-900'
-                                : 'font-bold text-slate-900'
+                                ? 'bg-gradient-to-br from-blue-700 to-blue-800 text-white ring-2 ring-blue-300 shadow-blue-500/20'
+                                : 'bg-gradient-to-br from-slate-700 to-slate-800 text-slate-100 group-hover:from-slate-600 group-hover:to-slate-700'
                             }`}>
-                              {other?.first_name || ''} {other?.last_name || ''}
-                            </h3>
-                            {room.last_message && (
-                              <span className={`text-[10px] uppercase tracking-wider ${
-                                hasUnread 
-                                  ? 'font-extrabold text-blue-600'
-                                  : 'font-bold text-slate-400'
+                              {getInitials(other?.first_name || '', other?.last_name || '', other?.username || '')}
+                            </div>
+                            <div className="absolute -bottom-0.5 -right-0.5">
+                              <OnlineStatusIndicator isOnline={isOnline} size="md" />
+                            </div>
+                          </div>
+
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between mb-1">
+                              <h3 className={`text-sm truncate ${
+                                isActive 
+                                  ? 'font-extrabold text-blue-900' 
+                                  : hasUnread
+                                  ? 'font-extrabold text-slate-900'
+                                  : 'font-bold text-slate-900 group-hover:text-slate-800'
                               }`}>
-                                {formatTimeAgo(room.last_message.created_at)}
-                              </span>
-                            )}
-                          </div>
+                                {other?.first_name || ''} {other?.last_name || ''}
+                              </h3>
+                              {room.last_message && (
+                                <span className={`text-[10px] uppercase tracking-wider font-bold ${
+                                  hasUnread 
+                                    ? 'text-blue-700'
+                                    : 'text-slate-400 group-hover:text-slate-500'
+                                }`}>
+                                  {formatTimeAgo(room.last_message.created_at)}
+                                </span>
+                              )}
+                            </div>
 
-                          <div className="flex items-center justify-between">
-                            <p className={`text-xs truncate max-w-[180px] ${
-                              isActive 
-                                ? 'text-blue-600/80 font-medium' 
-                                : hasUnread
-                                ? 'text-slate-900 font-bold'
-                                : 'text-slate-500 font-normal'
-                            }`}>
-                              {room.last_message ? room.last_message.content : 'No messages yet'}
-                            </p>
-                            {hasUnread && !isActive && (
-                              <motion.span
-                                initial={{ scale: 0 }}
-                                animate={{ scale: 1 }}
-                                className="flex items-center justify-center min-w-[20px] h-[20px] px-1.5 bg-gradient-to-br from-blue-600 to-blue-700 text-[10px] font-black text-white rounded-full shadow-lg shadow-blue-500/30 ring-2 ring-blue-200"
-                              >
-                                {unreadCount > 99 ? '99+' : unreadCount}
-                              </motion.span>
-                            )}
+                            <div className="flex items-center justify-between gap-2">
+                              <p className={`text-xs truncate flex-1 ${
+                                isActive 
+                                  ? 'text-blue-700 font-semibold' 
+                                  : hasUnread
+                                  ? 'text-slate-900 font-bold'
+                                  : 'text-slate-500 font-medium group-hover:text-slate-600'
+                              }`}>
+                                {room.last_message ? room.last_message.content : 'No messages yet'}
+                              </p>
+                              {hasUnread && !isActive && (
+                                <motion.span
+                                  initial={{ scale: 0 }}
+                                  animate={{ scale: 1 }}
+                                  className="flex items-center justify-center min-w-[22px] h-[22px] px-2 bg-gradient-to-br from-blue-600 to-blue-700 text-[10px] font-black text-white rounded-full shadow-md shadow-blue-500/40 ring-2 ring-blue-200"
+                                >
+                                  {unreadCount > 99 ? '99+' : unreadCount}
+                                </motion.span>
+                              )}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    </button>
+                      </button>
+                      {/* Divider between items */}
+                      {index < filteredRooms.length - 1 && !isActive && (
+                        <div className="absolute bottom-0 left-4 right-4 h-px bg-gradient-to-r from-transparent via-slate-200 to-transparent" />
+                      )}
+                    </div>
                   );
                 })}
               </div>
@@ -515,11 +548,11 @@ export default function MessagesPage() {
         </aside>
 
         {/* Right Section: Chat Window */}
-        <main className={`${isMobileView && !currentRoom ? 'hidden' : 'flex'} flex-1 flex-col bg-white relative`}>
+        <main className={`${isMobileView && !currentRoom ? 'hidden' : 'flex'} flex-1 flex-col bg-gradient-to-b from-white to-slate-50/30 relative`}>
           {currentRoom ? (
             <>
               {/* Chat Header */}
-              <header className="h-[88px] flex items-center justify-between px-6 border-b border-slate-50 bg-white shrink-0">
+              <header className="h-[88px] flex items-center justify-between px-6 border-b-2 border-slate-200 bg-white/90 backdrop-blur-sm shrink-0 shadow-sm">
                 <div className="flex items-center space-x-4">
                   <button
                     onClick={() => setCurrentRoom(null)}
@@ -547,7 +580,7 @@ export default function MessagesPage() {
                     return (
                       <div className="flex items-center space-x-4">
                         <div className="relative">
-                          <div className="w-11 h-11 bg-slate-800 rounded-xl flex items-center justify-center text-slate-100 font-bold shadow-sm whitespace-nowrap">
+                          <div className="w-12 h-12 bg-gradient-to-br from-slate-700 to-slate-800 rounded-xl flex items-center justify-center text-slate-100 font-bold shadow-md whitespace-nowrap">
                             {initials}
                           </div>
                           <div className="absolute -bottom-0.5 -right-0.5">
@@ -555,12 +588,12 @@ export default function MessagesPage() {
                           </div>
                         </div>
                         <div>
-                          <h3 className="text-base font-bold text-slate-900 leading-tight">
+                          <h3 className="text-lg font-extrabold text-slate-900 leading-tight">
                             {displayName}
                           </h3>
-                          <div className="flex items-center mt-0.5">
+                          <div className="flex items-center mt-1">
                             {currentTypingUser ? (
-                              <span className="text-xs text-blue-600 font-medium">typing...</span>
+                              <span className="text-xs text-blue-600 font-semibold italic">typing...</span>
                             ) : (
                               <OnlineStatusIndicator isOnline={isOnline} size="sm" showLabel />
                             )}
@@ -571,21 +604,21 @@ export default function MessagesPage() {
                   })()}
                 </div>
 
-                <div className="flex items-center space-x-2">
-                  <button className="p-2.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all">
+                <div className="flex items-center space-x-1">
+                  <button className="p-2.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all border border-transparent hover:border-blue-100">
                     <Phone className="w-5 h-5" />
                   </button>
-                  <button className="p-2.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all">
+                  <button className="p-2.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all border border-transparent hover:border-blue-100">
                     <Video className="w-5 h-5" />
                   </button>
                   <button 
                     onClick={handleDeleteChat}
-                    className="p-2.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"
+                    className="p-2.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all border border-transparent hover:border-red-100"
                     title="Delete conversation"
                   >
                     <Trash2 className="w-5 h-5" />
                   </button>
-                  <button className="p-2.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all">
+                  <button className="p-2.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all border border-transparent hover:border-blue-100">
                     <MoreVertical className="w-5 h-5" />
                   </button>
                 </div>
@@ -594,11 +627,11 @@ export default function MessagesPage() {
               {/* Messages Area */}
               <div 
                 ref={messagesContainerRef}
-                className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] bg-fixed opacity-[0.98]"
+                className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] bg-fixed opacity-[0.98] bg-slate-50/30"
               >
                 <div className="flex justify-center mb-8">
-                  <div className="px-4 py-1.5 bg-slate-100 rounded-full text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] shadow-sm">
-                    <ShieldCheck className="w-3 h-3 inline mr-1.5" />
+                  <div className="px-5 py-2 bg-white rounded-full text-[10px] font-black text-slate-600 uppercase tracking-[0.15em] shadow-md border-2 border-slate-100">
+                    <ShieldCheck className="w-3.5 h-3.5 inline mr-1.5 text-green-600" />
                     Secured Chat
                   </div>
                 </div>
@@ -619,7 +652,7 @@ export default function MessagesPage() {
                         className={`flex ${isOwn ? 'justify-end' : 'justify-start'} items-end space-x-2 group`}
                       >
                         {!isOwn && (
-                          <div className={`w-8 h-8 rounded-lg shrink-0 flex items-center justify-center text-xs font-bold ${showAvatar ? 'bg-slate-800 text-white' : 'opacity-0'
+                          <div className={`w-9 h-9 rounded-xl shrink-0 flex items-center justify-center text-xs font-bold shadow-md ${showAvatar ? 'bg-gradient-to-br from-slate-700 to-slate-800 text-white' : 'opacity-0'
                             }`}>
                             {getInitials(message.sender.first_name, message.sender.last_name, message.sender.username)}
                           </div>
@@ -627,11 +660,11 @@ export default function MessagesPage() {
 
                         <div className={`flex flex-col ${isOwn ? 'items-end' : 'items-start'} max-w-[75%]`}>
                           <div
-                            className={`px-5 py-3.5 rounded-2xl shadow-sm text-sm relative group/msg transition-all ${isOwn
+                            className={`px-5 py-3.5 rounded-2xl text-sm relative group/msg transition-all ${isOwn
                               ? isFailed
-                                ? 'bg-red-50 border border-red-200 text-red-900 rounded-br-none'
-                                : 'bg-blue-600 text-white rounded-br-none hover:bg-blue-700 hover:shadow-md'
-                              : 'bg-white border border-slate-100 text-slate-800 rounded-bl-none hover:border-slate-200 shadow-slate-200/50 hover:shadow-md'
+                                ? 'bg-red-50 border-2 border-red-300 text-red-900 rounded-br-md shadow-sm'
+                                : 'bg-gradient-to-br from-blue-600 to-blue-700 text-white rounded-br-md shadow-md shadow-blue-500/30 hover:shadow-lg hover:shadow-blue-500/40 border border-blue-500/20'
+                              : 'bg-white border-2 border-slate-200 text-slate-900 rounded-bl-md shadow-md hover:border-slate-300 hover:shadow-lg'
                               }`}
                           >
                             <p className="leading-relaxed font-medium break-words">{message.content}</p>
@@ -675,10 +708,10 @@ export default function MessagesPage() {
               </div>
 
               {/* Message Input Container */}
-              <footer className="p-6 bg-white border-t border-slate-50 shrink-0">
-                <div className="bg-slate-50 p-2 rounded-[24px] border border-slate-100/50 focus-within:bg-white focus-within:shadow-2xl focus-within:shadow-blue-500/5 focus-within:border-blue-500/30 transition-all duration-300">
+              <footer className="p-6 bg-white/90 backdrop-blur-sm border-t-2 border-slate-200 shrink-0 shadow-[0_-4px_12px_rgba(0,0,0,0.05)]">
+                <div className="bg-slate-50 p-2.5 rounded-2xl border-2 border-slate-200 focus-within:bg-white focus-within:shadow-xl focus-within:shadow-blue-500/10 focus-within:border-blue-400/60 transition-all duration-300">
                   <div className="flex items-end space-x-2">
-                    <button className="p-3 text-slate-400 hover:text-blue-600 rounded-full transition-colors hover:bg-blue-50">
+                    <button className="p-3 text-slate-400 hover:text-blue-600 rounded-xl transition-all hover:bg-blue-50 border border-transparent hover:border-blue-100">
                       <Paperclip className="w-5 h-5" />
                     </button>
 
@@ -699,11 +732,11 @@ export default function MessagesPage() {
                         }
                       }}
                       placeholder="Type your message..."
-                      className="flex-1 bg-transparent border-none focus:ring-0 text-slate-800 placeholder:text-slate-400 py-3 px-2 text-sm max-h-[120px] resize-none"
+                      className="flex-1 bg-transparent border-none focus:ring-0 text-slate-900 placeholder:text-slate-400 py-3 px-2 text-sm max-h-[120px] resize-none font-medium"
                     />
 
-                    <div className="flex items-center space-x-1 pb-1 pr-1">
-                      <button className="p-2.5 text-slate-400 hover:text-blue-600 rounded-full transition-colors hover:bg-blue-50">
+                    <div className="flex items-center space-x-1.5 pb-1 pr-1">
+                      <button className="p-2.5 text-slate-400 hover:text-blue-600 rounded-xl transition-all hover:bg-blue-50 border border-transparent hover:border-blue-100">
                         <ImageIcon className="w-5 h-5" />
                       </button>
                       <motion.button
@@ -711,8 +744,8 @@ export default function MessagesPage() {
                         whileTap={{ scale: 0.95 }}
                         onClick={handleSendMessage}
                         disabled={!messageText.trim()}
-                        className={`p-3.5 rounded-2xl shadow-lg transition-all flex items-center justify-center ${messageText.trim()
-                          ? 'bg-blue-600 text-white shadow-blue-200 hover:shadow-blue-300'
+                        className={`p-3.5 rounded-xl shadow-lg transition-all flex items-center justify-center ${messageText.trim()
+                          ? 'bg-gradient-to-br from-blue-600 to-blue-700 text-white shadow-blue-300 hover:shadow-blue-400 hover:from-blue-700 hover:to-blue-800'
                           : 'bg-slate-200 text-slate-400 shadow-none cursor-not-allowed'
                           }`}
                       >
