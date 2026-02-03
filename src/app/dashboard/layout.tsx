@@ -29,6 +29,7 @@ import { useConfirmStore } from '@/store/useConfirmStore';
 import { useHeartbeat } from '@/hooks/useHeartbeat';
 import { useChatStore } from '@/store/useChatStore';
 import { useMessageNotifications } from '@/hooks/useMessageNotifications';
+import MessageNotification from '@/components/MessageNotification';
 
 const veteranNavItems = [
   {
@@ -83,7 +84,13 @@ export default function DashboardLayout({
   const pathname = usePathname();
   const user = typeof window !== 'undefined' ? getUser() : null;
   const { confirm } = useConfirmStore();
-  const { rooms, fetchRooms } = useChatStore();
+  const { rooms, fetchRooms, setCurrentRoom } = useChatStore();
+  const [newMessageNotification, setNewMessageNotification] = useState<{
+    show: boolean;
+    senderName: string;
+    messagePreview: string;
+    roomId?: number;
+  }>({ show: false, senderName: '', messagePreview: '' });
 
   // Keep user's online status active by sending periodic heartbeats
   // This updates the last_activity field on the backend every 2 minutes
@@ -111,6 +118,48 @@ export default function DashboardLayout({
     enableTabTitleNotifications: true,
   });
 
+  // Show toast notification for new messages when NOT on messages page
+  useEffect(() => {
+    if (!user || pathname === '/dashboard/messages') return;
+
+    // Check for new messages in any room
+    rooms.forEach(room => {
+      if (room.unread_count && room.unread_count > 0 && room.last_message) {
+        // Get the other participant
+        const other = room.participants?.find((p: any) => p.id !== user.id);
+        
+        // Only show notification for messages not sent by current user
+        if (other && room.last_message.sender.id !== user.id) {
+          const senderName = `${other.first_name} ${other.last_name}`.trim() || other.username;
+          
+          // Create unique key for this notification
+          const notificationKey = `${room.id}-${room.last_message.id}`;
+          const lastShownNotification = sessionStorage.getItem('lastGlobalNotification');
+          
+          // Only show if we haven't shown this message before
+          if (lastShownNotification !== notificationKey) {
+            setNewMessageNotification({
+              show: true,
+              senderName,
+              messagePreview: room.last_message.content,
+              roomId: room.id
+            });
+
+            sessionStorage.setItem('lastGlobalNotification', notificationKey);
+
+            // Auto-hide after 6 seconds
+            setTimeout(() => {
+              setNewMessageNotification((prev) => ({ ...prev, show: false }));
+            }, 6000);
+            
+            // Only show one notification at a time
+            return;
+          }
+        }
+      }
+    });
+  }, [rooms, user, pathname]);
+
   const handleLogout = () => {
     confirm({
       title: 'Confirm Logout',
@@ -133,6 +182,28 @@ export default function DashboardLayout({
           isOpen={notificationSettingsOpen}
           onClose={() => setNotificationSettingsOpen(false)}
         />
+        
+        {/* Global Message Notification - shows on all dashboard pages except messages page */}
+        {pathname !== '/dashboard/messages' && (
+          <MessageNotification
+            show={newMessageNotification.show}
+            senderName={newMessageNotification.senderName}
+            messagePreview={newMessageNotification.messagePreview}
+            onClose={() => setNewMessageNotification((prev) => ({ ...prev, show: false }))}
+            onClick={() => {
+              // Navigate to messages page and open the specific room
+              if (newMessageNotification.roomId) {
+                const room = rooms.find(r => r.id === newMessageNotification.roomId);
+                if (room) {
+                  setCurrentRoom(room);
+                }
+                window.location.href = '/dashboard/messages';
+              }
+              setNewMessageNotification((prev) => ({ ...prev, show: false }));
+            }}
+          />
+        )}
+        
         <div className="flex min-h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-indigo-50">
         {/* Mobile sidebar overlay */}
         {sidebarOpen && (
@@ -190,7 +261,14 @@ export default function DashboardLayout({
                         </>
                       )}
                     </div>
-                    <span className="ml-3 flex-1">{item.name}</span>
+                    <span className={`ml-3 flex-1 ${showBadge ? 'font-extrabold' : ''}`}>
+                      {item.name}
+                      {showBadge && (
+                        <span className="block text-[10px] font-bold text-red-400 mt-0.5">
+                          {totalUnreadMessages} unread
+                        </span>
+                      )}
+                    </span>
                     {showBadge && (
                       <motion.span
                         key={totalUnreadMessages}
