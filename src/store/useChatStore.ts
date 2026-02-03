@@ -26,6 +26,12 @@ export interface ChatRoom {
   created_at: string;
   is_typing?: boolean; // Track if other user is typing
   last_seen?: string; // Track last seen timestamp
+  typing_user?: {
+    id: number;
+    username: string;
+    first_name?: string;
+    last_name?: string;
+  }; // User currently typing (from backend)
 }
 
 interface ChatStore {
@@ -95,7 +101,19 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         return bTime - aTime;
       });
 
-      set({ rooms: sortedRooms, loading: false });
+      // Update typing indicators from room data
+      const newTypingUsers = new Map<number, string>();
+      sortedRooms.forEach((room: any) => {
+        if (room.typing_user) {
+          // Display first name + last name or just username
+          const displayName = room.typing_user.first_name && room.typing_user.last_name
+            ? `${room.typing_user.first_name} ${room.typing_user.last_name}`
+            : room.typing_user.username;
+          newTypingUsers.set(room.id, displayName);
+        }
+      });
+
+      set({ rooms: sortedRooms, loading: false, typingUsers: newTypingUsers });
     } catch (error: any) {
       console.error('Failed to fetch chat rooms:', error);
       // Don't set error state to avoid React errors
