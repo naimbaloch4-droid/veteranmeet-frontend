@@ -1,4 +1,6 @@
+import { create } from 'zustand';
 import { User } from './usePostStore';
+import api from '@/lib/api';
 
 export interface Event {
   id: number;

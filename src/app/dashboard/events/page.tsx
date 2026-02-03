@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Calendar, Plus, Filter, Search, RefreshCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useEventStore } from '@/store/useEventStore';
+import { useEventStore, Event } from '@/store/useEventStore';
 import EventCard from '@/components/EventCard';
 import { getUser } from '@/lib/auth';
 import { useToastStore } from '@/store/useToastStore';
@@ -91,7 +91,7 @@ export default function EventsPage() {
     }
   };
 
-  const filteredEvents = (events || []).filter(event =>
+  const filteredEvents = (events || []).filter((event: Event) =>
     event.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
     event.description.toLowerCase().includes(searchQuery.toLowerCase())
   );
@@ -173,7 +173,7 @@ export default function EventsPage() {
         </div>
       ) : filteredEvents.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredEvents.map((event) => (
+          {filteredEvents.map((event: Event) => (
             <EventCard
               key={event.id}
               event={event}
