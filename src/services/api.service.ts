@@ -121,6 +121,13 @@ export const chatService = {
     const response = await api.get('/api/chat/online-users/');
     return response.data.online_users || response.data || [];
   },
+
+  sendTypingIndicator: async (roomId: number, isTyping: boolean) => {
+    const response = await api.post(`/api/chat/rooms/${roomId}/typing/`, {
+      is_typing: isTyping,
+    });
+    return response.data;
+  },
 };
 
 // ==================== USER/CONNECTION SERVICES ====================

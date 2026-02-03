@@ -44,7 +44,8 @@ export default function MessagesPage() {
     onlineUsers,
     typingUsers,
     fetchOnlineUsers,
-    deleteRoom
+    deleteRoom,
+    sendTypingIndicator
   } = useChatStore();
 
   const { following, fetchFollowing } = useConnectionStore();
@@ -68,6 +69,7 @@ export default function MessagesPage() {
   const prevMessagesCountRef = useRef(messages.length);
   const [isUserScrolling, setIsUserScrolling] = useState(false);
   const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     const userData = getUser();
@@ -81,7 +83,7 @@ export default function MessagesPage() {
     checkMobile();
     window.addEventListener('resize', checkMobile);
 
-    // SMART POLLING: Check for new messages/rooms every 4 seconds
+    // SMART POLLING: Check for new messages/rooms every 3 seconds for better sync
     const pollInterval = setInterval(() => {
       fetchRooms();
       fetchOnlineUsers(); // Poll online status
@@ -89,7 +91,7 @@ export default function MessagesPage() {
       if (currentRoom) {
         fetchMessages(currentRoom.id);
       }
-    }, 8000); // Increased to 8 seconds to reduce frequency
+    }, 3000); // Reduced to 3 seconds for better real-time experience
 
     return () => {
       window.removeEventListener('resize', checkMobile);
@@ -235,11 +237,35 @@ export default function MessagesPage() {
     }
   }, [currentRoom?.id, messages, user?.id, markMessageAsRead]);
 
+  // Handle typing indicator
+  const handleTyping = () => {
+    if (!currentRoom) return;
+
+    // Send typing indicator
+    sendTypingIndicator(currentRoom.id, true);
+
+    // Clear existing timeout
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+
+    // Stop typing after 3 seconds of inactivity
+    typingTimeoutRef.current = setTimeout(() => {
+      sendTypingIndicator(currentRoom.id, false);
+    }, 3000);
+  };
+
   const handleSendMessage = async () => {
     if (!messageText.trim() || !currentRoom) return;
 
     const textToSend = messageText;
     setMessageText('');
+    
+    // Stop typing indicator when sending
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+    sendTypingIndicator(currentRoom.id, false);
     
     // Reset textarea height
     if (textareaRef.current) {
@@ -394,10 +420,9 @@ export default function MessagesPage() {
                   const other = getOtherParticipant(room);
                   const isActive = currentRoom?.id === room.id;
                   const isOnline = other ? isUserOnline(other.id) : false;
-                  const hasUnread = room.unread_count && room.unread_count > 0;
-
-                  // DEBUGGING: Log unread count
-                  console.log('Unread:', room.unread_count, 'Room:', room.id, 'Active:', isActive);
+                  // Ensure unread_count is a number and greater than 0
+                  const unreadCount = typeof room.unread_count === 'number' ? room.unread_count : parseInt(String(room.unread_count || 0), 10);
+                  const hasUnread = unreadCount > 0;
 
                   if (!other) return null;
 
@@ -467,7 +492,7 @@ export default function MessagesPage() {
                                 animate={{ scale: 1 }}
                                 className="flex items-center justify-center min-w-[20px] h-[20px] px-1.5 bg-gradient-to-br from-blue-600 to-blue-700 text-[10px] font-black text-white rounded-full shadow-lg shadow-blue-500/30 ring-2 ring-blue-200"
                               >
-                                {(room.unread_count || 0) > 99 ? '99+' : room.unread_count}
+                                {unreadCount > 99 ? '99+' : unreadCount}
                               </motion.span>
                             )}
                           </div>
@@ -530,22 +555,15 @@ export default function MessagesPage() {
                           </div>
                         </div>
                         <div>
-                          <div className="flex items-center space-x-2">
-                            <h3 className="text-base font-bold text-slate-900 leading-tight">
-                              {displayName}
-                            </h3>
-                            {unreadCount > 0 && (
-                              <motion.span
-                                initial={{ opacity: 0, scale: 0.8 }}
-                                animate={{ opacity: 1, scale: 1 }}
-                                className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs font-bold rounded-full"
-                              >
-                                {unreadCount} unread
-                              </motion.span>
-                            )}
-                          </div>
+                          <h3 className="text-base font-bold text-slate-900 leading-tight">
+                            {displayName}
+                          </h3>
                           <div className="flex items-center mt-0.5">
-                            <OnlineStatusIndicator isOnline={isOnline} size="sm" showLabel />
+                            {currentTypingUser ? (
+                              <span className="text-xs text-blue-600 font-medium">typing...</span>
+                            ) : (
+                              <OnlineStatusIndicator isOnline={isOnline} size="sm" showLabel />
+                            )}
                           </div>
                         </div>
                       </div>
@@ -672,6 +690,7 @@ export default function MessagesPage() {
                         setMessageText(e.target.value);
                         e.target.style.height = 'auto';
                         e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
+                        handleTyping();
                       }}
                       onKeyPress={(e) => {
                         if (e.key === 'Enter' && !e.shiftKey) {

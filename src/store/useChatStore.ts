@@ -54,6 +54,7 @@ interface ChatStore {
   updateMessageStatus: (messageId: number, status: MessageStatus) => void;
   fetchOnlineUsers: () => Promise<void>;
   deleteRoom: (roomId: number) => Promise<void>;
+  sendTypingIndicator: (roomId: number, isTyping: boolean) => Promise<void>;
 }
 
 export const useChatStore = create<ChatStore>((set, get) => ({
@@ -413,6 +414,15 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     } catch (error: any) {
       console.error('Failed to delete room:', error);
       throw error;
+    }
+  },
+
+  sendTypingIndicator: async (roomId: number, isTyping: boolean) => {
+    try {
+      await chatService.sendTypingIndicator(roomId, isTyping);
+    } catch (error: any) {
+      // Silently fail - typing indicators are not critical
+      console.warn('Failed to send typing indicator:', error);
     }
   },
 
