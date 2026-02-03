@@ -1,5 +1,3 @@
-import { create } from 'zustand';
-import api from '@/lib/api';
 import { User } from './usePostStore';
 
 export interface Event {
@@ -92,52 +90,28 @@ export const useEventStore = create<EventStore>((set, get) => ({
   },
 
   joinEvent: async (eventId: number) => {
-    // Optimistic UI update
-    const event = get().events.find(e => e.id === eventId);
-    const previousEvents = get().events;
-    const previousMyEvents = get().myEvents;
-    
-    if (event) {
-      const updateEvent = (e: Event) => {
-        if (e.id === eventId) {
+    try {
+      const response = await api.post(`/api/events/${eventId}/join/`);
+      
+      const updateEvent = (event: Event) => {
+        if (event.id === eventId) {
           return {
-            ...e,
+            ...event,
             is_joined: true,
-            participants_count: (e.participants_count || 0) + 1
+            participants_count: (event.participants_count || 0) + 1
           };
         }
-        return e;
+        return event;
       };
       
       set((state) => ({
         events: state.events.map(updateEvent),
-        myEvents: [...state.myEvents, { ...event, is_joined: true }]
+        myEvents: [...state.myEvents, state.events.find(e => e.id === eventId)!].filter(Boolean)
       }));
-    }
-    
-    try {
-      const response = await api.post(`/api/events/${eventId}/join/`);
       
-      // Parse stars_earned from response - handle different response formats
-      const starsEarned = response.data?.stars_earned ?? 
-                         response.data?.star_points ?? 
-                         response.data?.stars ?? 
-                         event?.star_points ?? 
-                         0;
-      
-      return {
-        stars_earned: starsEarned,
-        message: response.data?.message || response.data?.detail || 'Successfully joined event!'
-      };
+      return response.data;
     } catch (error: any) {
       console.error('Failed to join event:', error);
-      
-      // Revert optimistic update on error
-      set({
-        events: previousEvents,
-        myEvents: previousMyEvents
-      });
-      
       throw error;
     }
   },
